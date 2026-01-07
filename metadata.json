@@ -1,0 +1,6 @@
+
+{
+  "name": "Nutrabene - Nutrição Inteligente",
+  "description": "Uma plataforma completa de nutrição e cuidados capilares com assistente inteligente Gemini para planos personalizados.",
+  "requestFramePermissions": ["camera", "microphone"]
+}
