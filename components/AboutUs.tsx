@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ASSETS } from './constants';
+import { ASSETS } from '../constants';
 
 const AboutUs: React.FC = () => {
     return (

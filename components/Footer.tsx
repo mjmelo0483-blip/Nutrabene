@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Section } from '../types';
-import { ASSETS } from './constants';
+import { ASSETS } from '../constants';
 
 interface FooterProps {
   onNavigate: (section: Section) => void;
