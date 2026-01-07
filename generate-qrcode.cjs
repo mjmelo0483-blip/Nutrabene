@@ -1,6 +1,6 @@
 const QRCode = require('qrcode');
 
-QRCode.toFile('public/assets/qrcode_cadastro.png', 'http://192.168.18.209:3002/#register', {
+QRCode.toFile('public/assets/qrcode_cadastro.png', 'https://nutrabene.vercel.app/#register', {
     width: 400,
     margin: 2,
     color: {
