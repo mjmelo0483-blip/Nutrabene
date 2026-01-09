@@ -92,8 +92,9 @@ const AdminDashboard: React.FC = () => {
 
         let error;
         if (clientData.id) {
-            // Update
-            const { error: updError } = await supabase.from('registrations').update(clientData).eq('id', clientData.id);
+            // Update - remove system fields that shouldn't be edited/restored
+            const { id, created_at, last_reminder_sent_at, ...updateData } = clientData;
+            const { error: updError } = await supabase.from('registrations').update(updateData).eq('id', id);
             error = updError;
         } else {
             // Create
