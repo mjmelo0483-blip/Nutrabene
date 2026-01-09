@@ -218,7 +218,7 @@ const AdminDashboard: React.FC = () => {
                         <div className="p-8 border-b flex justify-between items-center">
                             <h2 className="text-xl font-bold">Clientes Cadastrados ({registrations.length})</h2>
                             <button
-                                onClick={() => { setEditingClient({}); setIsModalOpen(true); }}
+                                onClick={() => { setEditingClient({ purchase_location: 'site_oficial' }); setIsModalOpen(true); }}
                                 className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center"
                             >
                                 <span className="material-symbols-outlined text-sm mr-1">add</span> Incluir Cliente
