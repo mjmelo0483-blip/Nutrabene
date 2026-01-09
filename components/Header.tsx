@@ -41,9 +41,16 @@ const Header: React.FC<HeaderProps> = ({ currentSection, onNavigate }) => {
         <div className="flex items-center gap-4">
           <button
             onClick={() => onNavigate('register')}
-            className="rounded-full bg-primary hover:bg-primary-dark text-white px-6 py-2.5 text-sm font-bold shadow-soft transition-all transform hover:-translate-y-0.5 active:scale-95"
+            className="hidden xs:block rounded-full bg-primary hover:bg-primary-dark text-white px-6 py-2.5 text-sm font-bold shadow-soft transition-all transform hover:-translate-y-0.5 active:scale-95"
           >
             Área do Cliente
+          </button>
+          <button
+            onClick={() => onNavigate('admin')}
+            className="p-2.5 flex items-center justify-center rounded-full bg-background-soft hover:bg-primary-light/30 text-dark-text dark:text-gray-200 transition-all active:scale-90 border border-primary/5"
+            title="Painel Administrativo"
+          >
+            <span className="material-symbols-outlined">admin_panel_settings</span>
           </button>
         </div>
       </div>
