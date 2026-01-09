@@ -28,6 +28,11 @@ const AdminDashboard: React.FC = () => {
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [settings, setSettings] = useState<ReminderSettings>({ message_template: '' });
     const [uploading, setUploading] = useState(false);
+    const [dataError, setDataError] = useState('');
+
+    // Modal State for CRUD
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingClient, setEditingClient] = useState<Partial<Registration> | null>(null);
 
     // Check current session
     useEffect(() => {
@@ -65,20 +70,58 @@ const AdminDashboard: React.FC = () => {
         }
     }
 
-    const [dataError, setDataError] = useState('');
-
     async function fetchData() {
         setDataError('');
         const { data: regs, error: regError } = await supabase.from('registrations').select('*').order('created_at', { ascending: false });
         const { data: sett, error: settError } = await supabase.from('reminder_settings').select('message_template, media_url').eq('key', 'default').single();
-
         if (regError) setDataError(`Erro ao carregar clientes: ${regError.message}`);
         if (settError) setDataError(prev => prev ? `${prev} | ${settError.message}` : `Erro ao carregar configurações: ${settError.message}`);
-
         if (regs) setRegistrations(regs);
         if (sett) setSettings(sett);
     }
 
+    // --- CRUD Operations ---
+    async function handleSaveClient(e: React.FormEvent) {
+        e.preventDefault();
+        if (!editingClient) return;
+
+        const clientData = {
+            ...editingClient,
+            whatsapp: editingClient.whatsapp?.replace(/\D/g, ''), // Clean mask
+        };
+
+        let error;
+        if (clientData.id) {
+            // Update
+            const { error: updError } = await supabase.from('registrations').update(clientData).eq('id', clientData.id);
+            error = updError;
+        } else {
+            // Create
+            const { error: insError } = await supabase.from('registrations').insert([clientData]);
+            error = insError;
+        }
+
+        if (error) {
+            alert(`Erro ao salvar: ${error.message}`);
+        } else {
+            setIsModalOpen(false);
+            setEditingClient(null);
+            fetchData();
+            alert('Informações salvas com sucesso!');
+        }
+    }
+
+    async function handleDeleteClient(id: string) {
+        if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+        const { error } = await supabase.from('registrations').delete().eq('id', id);
+        if (error) {
+            alert(`Erro ao excluir: ${error.message}`);
+        } else {
+            fetchData();
+        }
+    }
+
+    // --- Messaging Settings ---
     async function updateMessage() {
         const { error } = await supabase.from('reminder_settings').update({ message_template: settings.message_template }).eq('key', 'default');
         if (error) alert(error.message);
@@ -144,6 +187,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="lg:col-span-1 space-y-8">
                     <div className="bg-white rounded-3xl shadow-sm border p-8">
                         <h2 className="text-xl font-bold mb-6">Configuração da Mensagem</h2>
+                        <p className="text-xs text-muted-text mb-4">Dica: Use <b>{'{nome}'}</b> para personalizar.</p>
                         <textarea
                             value={settings.message_template}
                             onChange={e => setSettings({ ...settings, message_template: e.target.value })}
@@ -171,8 +215,14 @@ const AdminDashboard: React.FC = () => {
                 {/* Clients Column */}
                 <div className="lg:col-span-2">
                     <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
-                        <div className="p-8 border-b">
+                        <div className="p-8 border-b flex justify-between items-center">
                             <h2 className="text-xl font-bold">Clientes Cadastrados ({registrations.length})</h2>
+                            <button
+                                onClick={() => { setEditingClient({}); setIsModalOpen(true); }}
+                                className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center"
+                            >
+                                <span className="material-symbols-outlined text-sm mr-1">add</span> Incluir Cliente
+                            </button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full">
@@ -181,8 +231,7 @@ const AdminDashboard: React.FC = () => {
                                         <th className="px-6 py-4">Nome</th>
                                         <th className="px-6 py-4">WhatsApp</th>
                                         <th className="px-6 py-4">Sono</th>
-                                        <th className="px-6 py-4">Local</th>
-                                        <th className="px-6 py-4">Data</th>
+                                        <th className="px-6 py-4 text-center">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y text-sm">
@@ -194,8 +243,16 @@ const AdminDashboard: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 font-medium">{reg.whatsapp}</td>
                                             <td className="px-6 py-4 font-bold text-primary">{reg.sleep_schedule}</td>
-                                            <td className="px-6 py-4">{reg.purchase_location}</td>
-                                            <td className="px-6 py-4 text-gray-500">{new Date(reg.created_at).toLocaleDateString()}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex justify-center space-x-2">
+                                                    <button onClick={() => { setEditingClient(reg); setIsModalOpen(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                        <span className="material-symbols-outlined">edit</span>
+                                                    </button>
+                                                    <button onClick={() => handleDeleteClient(reg.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                                                        <span className="material-symbols-outlined">delete</span>
+                                                    </button>
+                                                </div>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -204,6 +261,53 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* CRUD Modal */}
+            {isModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
+                        <h2 className="text-2xl font-bold mb-6">{editingClient?.id ? 'Editar Cliente' : 'Novo Cliente'}</h2>
+                        <form onSubmit={handleSaveClient} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Nome Completo</label>
+                                    <input type="text" value={editingClient?.name || ''} onChange={e => setEditingClient({ ...editingClient, name: e.target.value })} className="w-full p-3 border rounded-xl" required />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">E-mail</label>
+                                    <input type="email" value={editingClient?.email || ''} onChange={e => setEditingClient({ ...editingClient, email: e.target.value })} className="w-full p-3 border rounded-xl" required />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">WhatsApp</label>
+                                    <input type="text" value={editingClient?.whatsapp || ''} onChange={e => setEditingClient({ ...editingClient, whatsapp: e.target.value })} className="w-full p-3 border rounded-xl" placeholder="(00) 00000-0000" required />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Data de Nascimento</label>
+                                    <input type="date" value={editingClient?.birth_date || ''} onChange={e => setEditingClient({ ...editingClient, birth_date: e.target.value })} className="w-full p-3 border rounded-xl" required />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Horário do Sono</label>
+                                    <input type="time" value={editingClient?.sleep_schedule || ''} onChange={e => setEditingClient({ ...editingClient, sleep_schedule: e.target.value })} className="w-full p-3 border rounded-xl" required />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Local de Compra</label>
+                                    <select value={editingClient?.purchase_location || 'site_oficial'} onChange={e => setEditingClient({ ...editingClient, purchase_location: e.target.value })} className="w-full p-3 border rounded-xl">
+                                        <option value="site_oficial">Site Oficial</option>
+                                        <option value="farmacia">Farmácia</option>
+                                        <option value="clinica">Clínica</option>
+                                        <option value="revendedor">Revendedor</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="flex space-x-4 mt-8">
+                                <button type="button" onClick={() => { setIsModalOpen(false); setEditingClient(null); }} className="flex-1 py-4 border rounded-xl font-bold text-gray-500">Cancelar</button>
+                                <button type="submit" className="flex-1 py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20">Salvar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
