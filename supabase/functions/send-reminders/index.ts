@@ -71,7 +71,10 @@ Deno.serve(async (req) => {
         const results = [];
 
         for (const user of users || []) {
-            const whatsapp = user.whatsapp.replace(/\D/g, '');
+            let whatsapp = user.whatsapp.replace(/\D/g, '');
+            if (whatsapp.length === 10 || whatsapp.length === 11) {
+                whatsapp = '55' + whatsapp;
+            }
             const name = user.name.split(' ')[0];
             const finalizedMessage = messageTemplate.replace('{nome}', name);
 
