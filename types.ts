@@ -1,5 +1,5 @@
 
-export type Section = 'home' | 'products' | 'register' | 'assistant' | 'about' | 'privacy';
+export type Section = 'home' | 'products' | 'register' | 'assistant' | 'about' | 'privacy' | 'admin';
 
 export interface ProductIngredient {
   name: string;

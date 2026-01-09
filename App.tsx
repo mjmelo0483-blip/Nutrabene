@@ -11,6 +11,7 @@ import SmartAssistant from './components/SmartAssistant';
 import BenefitsSection from './components/BenefitsSection';
 import HowItWorks from './components/HowItWorks';
 import Testimonials from './components/Testimonials';
+import AdminDashboard from './components/AdminDashboard';
 import { Section, Product } from './types';
 
 const App: React.FC = () => {
@@ -21,7 +22,7 @@ const App: React.FC = () => {
   // Read URL hash on load and navigate to the correct section
   useEffect(() => {
     const hash = window.location.hash.replace('#', '') as Section;
-    const validSections: Section[] = ['home', 'products', 'register', 'about', 'privacy'];
+    const validSections: Section[] = ['home', 'products', 'register', 'about', 'privacy', 'admin'];
     if (hash && validSections.includes(hash)) {
       setCurrentSection(hash);
     }
@@ -86,6 +87,8 @@ const App: React.FC = () => {
         return <AboutUs />;
       case 'privacy':
         return <PrivacyPolicy />;
+      case 'admin':
+        return <AdminDashboard />;
       default:
         return <Hero onNavigate={setCurrentSection} />;
     }
