@@ -20,13 +20,24 @@ Deno.serve(async (req) => {
 
         const supabase = createClient(supabaseUrl, supabaseKey);
 
+        // Check Z-API Instance Status
+        const statusHeaders: Record<string, string> = {};
+        if (zapiClientToken) statusHeaders['Client-Token'] = zapiClientToken;
+        const statusCheck = await fetch(`https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/status`, {
+            headers: statusHeaders
+        });
+        const statusData = await statusCheck.json();
+        console.log(`[Z-API Status] Connected: ${statusData.connected} | Message: ${statusData.message || statusData.error || 'N/A'}`);
+
         // Allow manual trigger for testing via POST body
         let manualTime: string | null = null;
+        let manualPhone: string | null = null;
         if (req.method === 'POST') {
             try {
                 const body = await req.json();
                 manualTime = body.time || null;
-                console.log(`[Manual Trigger] Received time: ${manualTime}`);
+                manualPhone = body.phone || null;
+                console.log(`[Manual Trigger] Received time: ${manualTime} | phone: ${manualPhone}`);
             } catch (e) {
                 // Ignore parse errors for empty bodies
             }
@@ -77,15 +88,27 @@ Deno.serve(async (req) => {
         console.log(`[Execution] Target Time: ${currentTimeStr} | Date: ${todayStr} | Manual: ${!!manualTime}`);
 
         // Querying users
-        const { data: users, error: fetchError } = await supabase
-            .from('registrations')
-            .select('*')
-            .eq('sleep_schedule', currentTimeStr)
-            .or(`last_reminder_sent_at.is.null,last_reminder_sent_at.lt.${todayStr}T00:00:00Z`);
+        let users;
+        if (manualPhone) {
+            // Mock a user for manual phone testing
+            users = [{
+                id: 'test-user',
+                name: 'Test',
+                email: 'test@example.com',
+                whatsapp: manualPhone
+            }];
+        } else {
+            const { data, error: fetchError } = await supabase
+                .from('registrations')
+                .select('*')
+                .eq('sleep_schedule', currentTimeStr)
+                .or(`last_reminder_sent_at.is.null,last_reminder_sent_at.lt.${todayStr}T00:00:00Z`);
 
-        if (fetchError) {
-            console.error(`[Fetch Error] ${fetchError.message}`);
-            throw fetchError;
+            if (fetchError) {
+                console.error(`[Fetch Error] ${fetchError.message}`);
+                throw fetchError;
+            }
+            users = data;
         }
 
         console.log(`[Query Result] Found ${users?.length || 0} users for time ${currentTimeStr}`);
@@ -94,8 +117,8 @@ Deno.serve(async (req) => {
 
         for (const user of users || []) {
             let whatsapp = user.whatsapp.replace(/\D/g, '');
-            // Simple normalization for Brazil
-            if (whatsapp.length === 10 || whatsapp.length === 11) {
+            // Simple normalization for Brazil - only if not already prefixed with 55
+            if (!whatsapp.startsWith('55') && (whatsapp.length === 10 || whatsapp.length === 11)) {
                 whatsapp = '55' + whatsapp;
             }
 
@@ -138,24 +161,26 @@ Deno.serve(async (req) => {
                 const zapiResult = await response.json();
 
                 if (response.ok) {
-                    console.log(`[Success] Sent to ${user.email}`);
-                    const { error: updateError } = await supabase
-                        .from('registrations')
-                        .update({ last_reminder_sent_at: new Date().toISOString() })
-                        .eq('id', user.id);
+                    console.log(`[Success] Sent to ${user.email}:`, zapiResult);
+                    if (user.id !== 'test-user') {
+                        const { error: updateError } = await supabase
+                            .from('registrations')
+                            .update({ last_reminder_sent_at: new Date().toISOString() })
+                            .eq('id', user.id);
 
-                    if (updateError) {
-                        console.error(`[Update Error] Failed to update timestamp for ${user.email}: ${updateError.message}`);
+                        if (updateError) {
+                            console.error(`[Update Error] Failed to update timestamp for ${user.email}: ${updateError.message}`);
+                        }
                     }
 
-                    results.push({ user: user.email, status: 'success', zapi: zapiResult });
+                    results.push({ user: user.email, phone: whatsapp, status: 'success', zapi: zapiResult });
                 } else {
                     console.error(`[Z-API Error] ${user.email}:`, zapiResult);
-                    results.push({ user: user.email, status: 'failed', error: zapiResult });
+                    results.push({ user: user.email, phone: whatsapp, status: 'failed', error: zapiResult });
                 }
             } catch (err) {
                 console.error(`[Fetch Fatal] ${user.email}: ${err.message}`);
-                results.push({ user: user.email, status: 'error', message: err.message });
+                results.push({ user: user.email, phone: whatsapp, status: 'error', message: err.message });
             }
         }
 
@@ -163,6 +188,7 @@ Deno.serve(async (req) => {
             processed: results.length,
             time: currentTimeStr,
             date: todayStr,
+            zapiStatus: statusData,
             details: results
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
