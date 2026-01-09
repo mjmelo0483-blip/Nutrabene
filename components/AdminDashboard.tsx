@@ -65,9 +65,16 @@ const AdminDashboard: React.FC = () => {
         }
     }
 
+    const [dataError, setDataError] = useState('');
+
     async function fetchData() {
-        const { data: regs } = await supabase.from('registrations').select('*').order('created_at', { ascending: false });
-        const { data: sett } = await supabase.from('reminder_settings').select('message_template, media_url').eq('key', 'default').single();
+        setDataError('');
+        const { data: regs, error: regError } = await supabase.from('registrations').select('*').order('created_at', { ascending: false });
+        const { data: sett, error: settError } = await supabase.from('reminder_settings').select('message_template, media_url').eq('key', 'default').single();
+
+        if (regError) setDataError(`Erro ao carregar clientes: ${regError.message}`);
+        if (settError) setDataError(prev => prev ? `${prev} | ${settError.message}` : `Erro ao carregar configurações: ${settError.message}`);
+
         if (regs) setRegistrations(regs);
         if (sett) setSettings(sett);
     }
@@ -129,6 +136,8 @@ const AdminDashboard: React.FC = () => {
                 <h1 className="text-4xl font-extrabold">Painel Administrativo</h1>
                 <button onClick={() => { supabase.auth.signOut(); setIsAdmin(false); }} className="text-red-500 font-semibold">Sair</button>
             </div>
+
+            {dataError && <div className="bg-amber-50 text-amber-600 p-4 rounded-xl mb-8 text-sm border border-amber-200">{dataError}</div>}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Settings Column */}
