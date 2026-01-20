@@ -172,6 +172,9 @@ const AdminDashboard: React.FC = () => {
     const [isResellerModalOpen, setIsResellerModalOpen] = useState(false);
     const [resellerForm, setResellerForm] = useState<Partial<Reseller>>({ commission_rate: 20 });
 
+    const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
+    const [selectedResellerForClosing, setSelectedResellerForClosing] = useState<Reseller | null>(null);
+
     const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth());
     const [filterYear, setFilterYear] = useState<number>(new Date().getFullYear());
 
@@ -394,6 +397,35 @@ const AdminDashboard: React.FC = () => {
                 }
             }
         );
+    }
+
+    async function handleCloseCommissions(resellerId: string, saleIds: string[]) {
+        if (saleIds.length === 0) return;
+
+        setLoading(true);
+        try {
+            const { error: saleError } = await supabase
+                .from('sales')
+                .update({ payment_status: 'paid' })
+                .in('id', saleIds);
+
+            if (saleError) throw saleError;
+
+            const { error: finError } = await supabase
+                .from('financial_entries')
+                .update({ status: 'paid', payment_date: new Date().toISOString().split('T')[0] })
+                .in('sale_id', saleIds);
+
+            if (finError) throw finError;
+
+            showNotification('Comissões fechadas e marcadas como pagas!');
+            setIsClosingModalOpen(false);
+            fetchData();
+        } catch (error: any) {
+            showNotification(`Erro ao fechar comissões: ${error.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
     }
 
     // --- Sale Handlers ---
@@ -1268,9 +1300,17 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <h3 className="font-black text-gray-800 text-lg">{r.name}</h3>
                                     <p className="text-xs text-gray-400 mb-4">{r.whatsapp || 'Sem contato'}</p>
-                                    <div className="flex justify-between items-center pt-4 border-t">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Comissão</span>
-                                        <span className="font-black text-primary">{r.commission_rate}%</span>
+                                    <div className="flex justify-between items-center pt-4 border-t gap-2">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">Comissão</span>
+                                            <span className="font-black text-primary">{r.commission_rate}%</span>
+                                        </div>
+                                        <button
+                                            onClick={() => { setSelectedResellerForClosing(r); setIsClosingModalOpen(true); }}
+                                            className="bg-gray-50 hover:bg-primary hover:text-white text-[10px] font-black uppercase px-3 py-2 rounded-xl transition-all border flex items-center"
+                                        >
+                                            <span className="material-symbols-outlined text-sm mr-1">request_quote</span> Fechamento
+                                        </button>
                                     </div>
                                 </div>
                             ))}
@@ -1751,6 +1791,93 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            {/* Closing Commissions Modal */}
+            {isClosingModalOpen && selectedResellerForClosing && (() => {
+                const pendingSales = sales.filter(s => s.reseller_id === selectedResellerForClosing.id && s.payment_status !== 'paid');
+                const totalPendingCommission = pendingSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+                const totalPendingNet = pendingSales.reduce((acc, s) => acc + s.net_amount, 0);
+
+                return (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                        <div className="bg-white w-full max-w-2xl rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 className="text-2xl font-black text-gray-800">Fechamento: {selectedResellerForClosing.name}</h2>
+                                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Vendas Pendentes de Acerto</p>
+                                </div>
+                                <button onClick={() => setIsClosingModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                <div className="bg-amber-50 p-5 rounded-3xl border border-amber-100">
+                                    <p className="text-[10px] font-black text-amber-600 uppercase mb-1">Total Comissões</p>
+                                    <p className="text-2xl font-black text-amber-700">R$ {totalPendingCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="bg-primary/5 p-5 rounded-3xl border border-primary/10">
+                                    <p className="text-[10px] font-black text-primary uppercase mb-1">A Acertar (Líquido)</p>
+                                    <p className="text-2xl font-black text-primary">R$ {totalPendingNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto mb-6 pr-2">
+                                <table className="w-full text-left">
+                                    <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase sticky top-0">
+                                        <tr>
+                                            <th className="px-3 py-3 rounded-l-xl">Data</th>
+                                            <th className="px-3 py-3">Produto</th>
+                                            <th className="px-3 py-3 text-right">Qtd</th>
+                                            <th className="px-3 py-3 text-right">Comissão</th>
+                                            <th className="px-3 py-3 text-right rounded-r-xl">Líquido</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y text-xs">
+                                        {pendingSales.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={5} className="py-10 text-center text-gray-400 font-bold italic">Nenhuma venda pendente para este revendedor.</td>
+                                            </tr>
+                                        ) : (
+                                            pendingSales.map(s => (
+                                                <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                                                    <td className="px-3 py-4 font-medium text-gray-500">{formatDate(s.sale_date)}</td>
+                                                    <td className="px-3 py-4 font-bold text-gray-700">{products.find(p => p.id === s.product_id)?.name}</td>
+                                                    <td className="px-3 py-4 text-right font-bold">{s.quantity}</td>
+                                                    <td className="px-3 py-4 text-right font-black text-amber-600">R$ {s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-3 py-4 text-right font-black text-primary">R$ {s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => setIsClosingModalOpen(false)}
+                                    className="flex-1 py-4 font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    Voltar
+                                </button>
+                                <button
+                                    disabled={pendingSales.length === 0}
+                                    onClick={() => {
+                                        askConfirmation(
+                                            'Fechar Comissões',
+                                            `Deseja marcar as ${pendingSales.length} vendas como pagas? Isso liquidará as entradas financeiras correspondentes.`,
+                                            () => handleCloseCommissions(selectedResellerForClosing.id, pendingSales.map(s => s.id))
+                                        );
+                                    }}
+                                    className="flex-[2] bg-primary text-white py-4 rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all disabled:opacity-30"
+                                >
+                                    Efetivar Fechamento Total
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Category Modal */}
             {isCategoryModalOpen && (
