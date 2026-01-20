@@ -49,8 +49,11 @@ interface FinancialEntry {
     payment_date?: string;
     status: 'pending' | 'paid' | 'overdue';
     category: string;
+    category_id?: string;
     bank_account_id?: string;
     reseller_id?: string;
+    client_id?: string;
+    sale_id?: string;
 }
 
 interface Sale {
@@ -66,6 +69,21 @@ interface Sale {
     payment_status: string;
 }
 
+interface FinancialCategory {
+    id: string;
+    name: string;
+    type: 'income' | 'expense';
+}
+
+interface CreditCard {
+    id: string;
+    name: string;
+    limit_amount: number;
+    current_balance: number;
+    closing_day: number;
+    due_day: number;
+}
+
 const AdminDashboard: React.FC = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -73,7 +91,7 @@ const AdminDashboard: React.FC = () => {
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState('');
 
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'inventory' | 'sales' | 'resellers' | 'finances' | 'settings'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'inventory' | 'sales' | 'resellers' | 'finances' | 'accounts' | 'categories' | 'settings'>('dashboard');
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [settings, setSettings] = useState<ReminderSettings>({ message_template: '' });
     const [products, setProducts] = useState<ProductInventory[]>([]);
@@ -81,10 +99,19 @@ const AdminDashboard: React.FC = () => {
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
     const [financialEntries, setFinancialEntries] = useState<FinancialEntry[]>([]);
     const [sales, setSales] = useState<Sale[]>([]);
+    const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+    const [categories, setCategories] = useState<FinancialCategory[]>([]);
 
     const [uploading, setUploading] = useState(false);
     const [updatingStock, setUpdatingStock] = useState<string | null>(null);
     const [dataError, setDataError] = useState('');
+
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4000);
+    };
 
     // Modal State for CRUD
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,6 +127,31 @@ const AdminDashboard: React.FC = () => {
         due_date: new Date().toISOString().split('T')[0],
         payment_status: 'pending'
     });
+
+    const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
+    const [financialForm, setFinancialForm] = useState<Partial<FinancialEntry>>({
+        type: 'payable',
+        due_date: new Date().toISOString().split('T')[0],
+        status: 'pending'
+    });
+
+    const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+    const [accountForm, setAccountForm] = useState<Partial<BankAccount>>({ balance: 0 });
+
+    const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+    const [cardForm, setCardForm] = useState<Partial<CreditCard>>({ limit_amount: 0, current_balance: 0 });
+
+    const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+    const [categoryForm, setCategoryForm] = useState<Partial<FinancialCategory>>({ type: 'expense' });
+
+    const [isResellerModalOpen, setIsResellerModalOpen] = useState(false);
+    const [resellerForm, setResellerForm] = useState<Partial<Reseller>>({ commission_rate: 20 });
+
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
+
+    const askConfirmation = (title: string, message: string, onConfirm: () => void) => {
+        setConfirmModal({ isOpen: true, title, message, onConfirm });
+    };
 
     // Check current session
     useEffect(() => {
@@ -147,7 +199,9 @@ const AdminDashboard: React.FC = () => {
                 { data: resel },
                 { data: banks },
                 { data: fin },
-                { data: sls }
+                { data: sls },
+                { data: cards },
+                { data: cats }
             ] = await Promise.all([
                 supabase.from('registrations').select('*').order('created_at', { ascending: false }),
                 supabase.from('reminder_settings').select('message_template, media_url').eq('key', 'default').single(),
@@ -155,7 +209,9 @@ const AdminDashboard: React.FC = () => {
                 supabase.from('resellers').select('*').order('name'),
                 supabase.from('bank_accounts').select('*').order('name'),
                 supabase.from('financial_entries').select('*').order('due_date', { ascending: true }),
-                supabase.from('sales').select('*').order('sale_date', { ascending: false })
+                supabase.from('sales').select('*').order('sale_date', { ascending: false }),
+                supabase.from('credit_cards').select('*').order('name'),
+                supabase.from('financial_categories').select('*').order('name')
             ]);
 
             if (regs) setRegistrations(regs);
@@ -165,6 +221,8 @@ const AdminDashboard: React.FC = () => {
             if (banks) setBankAccounts(banks);
             if (fin) setFinancialEntries(fin);
             if (sls) setSales(sls);
+            if (cards) setCreditCards(cards);
+            if (cats) setCategories(cats);
         } catch (err) {
             console.error(err);
             setDataError('Erro ao sincronizar dados com o servidor.');
@@ -191,15 +249,28 @@ const AdminDashboard: React.FC = () => {
             error = insError;
         }
 
-        if (error) alert(`Erro: ${error.message}`);
-        else { setIsModalOpen(false); setEditingClient(null); fetchData(); }
+        if (error) showNotification(`Erro: ${error.message}`, 'error');
+        else {
+            showNotification(clientData.id ? 'Cliente atualizado com sucesso!' : 'Cliente cadastrado com sucesso!');
+            setIsModalOpen(false);
+            setEditingClient(null);
+            fetchData();
+        }
     }
 
     async function handleDeleteClient(id: string) {
-        if (!confirm('Excluir cliente?')) return;
-        const { error } = await supabase.from('registrations').delete().eq('id', id);
-        if (error) alert(error.message);
-        else fetchData();
+        askConfirmation(
+            'Excluir Cliente',
+            'Deseja excluir permanentemente este cliente?',
+            async () => {
+                const { error } = await supabase.from('registrations').delete().eq('id', id);
+                if (error) showNotification(`Erro ao excluir: ${error.message}`, 'error');
+                else {
+                    showNotification('Cliente removido com sucesso!');
+                    fetchData();
+                }
+            }
+        );
     }
 
     // --- Product/Stock Handlers ---
@@ -207,7 +278,7 @@ const AdminDashboard: React.FC = () => {
         if (newQuantity < 0) return;
         setUpdatingStock(id);
         const { error } = await supabase.from('products').update({ stock_quantity: newQuantity }).eq('id', id);
-        if (error) alert(error.message);
+        if (error) showNotification(`Erro ao atualizar estoque: ${error.message}`, 'error');
         else setProducts(products.map(p => p.id === id ? { ...p, stock_quantity: newQuantity } : p));
         setUpdatingStock(null);
     }
@@ -215,6 +286,12 @@ const AdminDashboard: React.FC = () => {
     async function handleSaveProduct(e: React.FormEvent) {
         e.preventDefault();
         if (!editingProduct) return;
+
+        if (!editingProduct.name || (editingProduct.price || 0) <= 0) {
+            showNotification('Preencha o nome e um preço válido!', 'error');
+            return;
+        }
+
         let error;
         if (editingProduct.id && products.find(p => p.id === editingProduct.id)) {
             const { id, ...updateData } = editingProduct;
@@ -224,91 +301,200 @@ const AdminDashboard: React.FC = () => {
             const { error: insError } = await supabase.from('products').insert([editingProduct]);
             error = insError;
         }
-        if (error) alert(error.message);
-        else { setIsProductModalOpen(false); setEditingProduct(null); fetchData(); }
+
+        if (error) showNotification(`Erro ao salvar produto: ${error.message}`, 'error');
+        else {
+            showNotification('Produto salvo com sucesso!');
+            setIsProductModalOpen(false);
+            setEditingProduct(null);
+            fetchData();
+        }
     }
 
     async function handleDeleteProduct(id: string) {
-        if (!confirm('Excluir produto?')) return;
-        const { error } = await supabase.from('products').delete().eq('id', id);
-        if (error) alert(error.message);
-        else fetchData();
+        askConfirmation(
+            'Excluir Produto',
+            'Deseja excluir este produto?',
+            async () => {
+                const { error } = await supabase.from('products').delete().eq('id', id);
+                if (error) showNotification(`Erro ao excluir produto: ${error.message}`, 'error');
+                else {
+                    showNotification('Produto removido!');
+                    fetchData();
+                }
+            }
+        );
     }
 
     // --- Reseller Handlers ---
-    async function handleSaveReseller(e: React.FormEvent, resellerData: any) {
+    async function handleSaveReseller(e: React.FormEvent) {
         e.preventDefault();
+        if (!resellerForm.name || !resellerForm.whatsapp) {
+            showNotification('Nome e WhatsApp são obrigatórios!', 'error');
+            return;
+        }
+
         let error;
-        if (resellerData.id) {
-            const { id, ...updateData } = resellerData;
+        if (resellerForm.id) {
+            const { id, ...updateData } = resellerForm;
             const { error: updError } = await supabase.from('resellers').update(updateData).eq('id', id);
             error = updError;
         } else {
-            const { error: insError } = await supabase.from('resellers').insert([resellerData]);
+            const { error: insError } = await supabase.from('resellers').insert([resellerForm]);
             error = insError;
         }
-        if (error) alert(error.message);
-        else fetchData();
+
+        if (error) showNotification(`Erro ao salvar revendedor: ${error.message}`, 'error');
+        else {
+            showNotification('Revendedor salvo com sucesso!');
+            setIsResellerModalOpen(false);
+            setResellerForm({ commission_rate: 20 });
+            fetchData();
+        }
     }
 
     async function handleDeleteReseller(id: string) {
-        if (!confirm('Excluir revendedor?')) return;
-        const { error } = await supabase.from('resellers').delete().eq('id', id);
-        if (error) alert(error.message);
-        else fetchData();
+        askConfirmation(
+            'Excluir Revendedor',
+            'Deseja excluir este revendedor?',
+            async () => {
+                const { error } = await supabase.from('resellers').delete().eq('id', id);
+                if (error) showNotification(`Erro ao excluir revendedor: ${error.message}`, 'error');
+                else {
+                    showNotification('Revendedor removido!');
+                    fetchData();
+                }
+            }
+        );
     }
 
     // --- Sale Handlers ---
     async function handleRegisterSale(e: React.FormEvent) {
         e.preventDefault();
         if (!saleForm.product_id || !saleForm.quantity || !saleForm.total_price) {
-            alert('Preencha os campos obrigatórios!');
+            showNotification('Preencha os campos obrigatórios!', 'error');
             return;
         }
 
-        // 1. Check stock
         const product = products.find(p => p.id === saleForm.product_id);
-        if (!product || product.stock_quantity < (saleForm.quantity || 0)) {
-            alert('Estoque insuficiente para esta venda!');
-            return;
+        if (!product) return;
+
+        // If editing, handle stock adjustment difference
+        if (saleForm.id) {
+            const oldSale = sales.find(s => s.id === saleForm.id);
+            if (oldSale) {
+                // Check if product changed
+                if (oldSale.product_id === saleForm.product_id) {
+                    const diff = (saleForm.quantity || 0) - oldSale.quantity;
+                    if (product.stock_quantity < diff) {
+                        showNotification('Estoque insuficiente para a alteração!', 'error');
+                        return;
+                    }
+                    // Update stock with the difference in database
+                    await supabase.from('products').update({ stock_quantity: product.stock_quantity - diff }).eq('id', product.id);
+                } else {
+                    // Product changed: restore old product stock, decrement new product stock
+                    const oldProduct = products.find(p => p.id === oldSale.product_id);
+                    if (oldProduct) {
+                        await supabase.from('products').update({ stock_quantity: oldProduct.stock_quantity + oldSale.quantity }).eq('id', oldProduct.id);
+                    }
+
+                    if (product.stock_quantity < (saleForm.quantity || 0)) {
+                        showNotification('Estoque insuficiente no novo produto!', 'error');
+                        // Rollback old product stock
+                        if (oldProduct) await supabase.from('products').update({ stock_quantity: oldProduct.stock_quantity }).eq('id', oldProduct.id);
+                        return;
+                    }
+                    await supabase.from('products').update({ stock_quantity: product.stock_quantity - (saleForm.quantity || 0) }).eq('id', product.id);
+                }
+
+                // Update the sale
+                const { error: updError } = await supabase.from('sales').update(saleForm).eq('id', saleForm.id);
+                if (updError) { showNotification(updError.message, 'error'); return; }
+
+                // Update the corresponding financial entry
+                await supabase.from('financial_entries')
+                    .update({
+                        amount: saleForm.total_price,
+                        due_date: saleForm.due_date,
+                        description: `Venda #${saleForm.id.slice(0, 8)} - ${product.name} (Editado)`
+                    })
+                    .eq('sale_id', saleForm.id);
+            }
+        } else {
+            // New sale
+            if (product.stock_quantity < (saleForm.quantity || 0)) {
+                showNotification('Estoque insuficiente para esta venda!', 'error');
+                return;
+            }
+
+            const { data: sale, error: slsError } = await supabase.from('sales').insert([saleForm]).select().single();
+            if (slsError) { showNotification(`Erro na venda: ${slsError.message}`, 'error'); return; }
+
+            // Decrement stock in database
+            await supabase.from('products').update({ stock_quantity: product.stock_quantity - (saleForm.quantity || 0) }).eq('id', product.id);
+
+            // Create financial entry
+            await supabase.from('financial_entries').insert([{
+                type: 'receivable',
+                description: `Venda #${sale.id.slice(0, 8)} - ${product.name}`,
+                amount: saleForm.total_price,
+                due_date: saleForm.due_date || new Date().toISOString().split('T')[0],
+                status: 'pending',
+                category: 'Venda de Produto',
+                sale_id: sale.id,
+                reseller_id: saleForm.reseller_id,
+                client_id: saleForm.client_id
+            }]);
         }
 
-        // 2. Insert sale
-        const { data: sale, error: saleError } = await supabase.from('sales').insert([saleForm]).select().single();
-        if (saleError) { alert(saleError.message); return; }
-
-        // 3. Update stock
-        await handleUpdateStock(saleForm.product_id, product.stock_quantity - (saleForm.quantity || 0));
-
-        // 4. Create financial entry (Receivable)
-        await supabase.from('financial_entries').insert([{
-            type: 'receivable',
-            description: `Venda #${sale.id.slice(0, 8)} - ${product.name}`,
-            amount: saleForm.total_price,
-            due_date: saleForm.due_date || new Date().toISOString().split('T')[0],
-            status: 'pending',
-            category: 'Venda de Produto',
-            sale_id: sale.id,
-            reseller_id: saleForm.reseller_id,
-            client_id: saleForm.client_id
-        }]);
-
-        alert('Venda registrada com sucesso!');
+        showNotification(saleForm.id ? 'Venda atualizada com sucesso!' : 'Venda registrada com sucesso!');
         setIsSaleModalOpen(false);
         fetchData();
-        setSaleForm({
-            quantity: 1,
-            sale_date: new Date().toISOString().split('T')[0],
-            due_date: new Date().toISOString().split('T')[0],
-            payment_status: 'pending'
-        });
+    }
+
+    async function handleDeleteSale(id: string) {
+        askConfirmation(
+            'Excluir Venda',
+            'Deseja excluir esta venda? ATENÇÃO: O estoque será restaurado automaticamente.',
+            async () => {
+                const sale = sales.find(s => s.id === id);
+                if (!sale) return;
+
+                // Restore stock
+                const product = products.find(p => p.id === sale.product_id);
+                if (product) {
+                    await supabase.from('products').update({ stock_quantity: product.stock_quantity + sale.quantity }).eq('id', product.id);
+                }
+
+                // Delete associated financial entry
+                await supabase.from('financial_entries').delete().eq('sale_id', id);
+
+                // Delete sale
+                const { error } = await supabase.from('sales').delete().eq('id', id);
+                if (error) showNotification(`Erro ao excluir: ${error.message}`, 'error');
+                else {
+                    showNotification('Venda e registros associados removidos.');
+                    fetchData();
+                }
+            }
+        );
     }
 
     // --- Financial Handlers ---
-    async function handleSaveFinancialEntry(e: React.FormEvent, entryData: any) {
+    async function handleSaveFinancialEntry(e: React.FormEvent) {
         e.preventDefault();
+        if (!financialForm.description || !financialForm.amount) {
+            showNotification('Descrição e valor são obrigatórios!', 'error');
+            return;
+        }
+
+        // Get category name from ID if possible
+        const category = categories.find(c => c.id === financialForm.category_id)?.name || financialForm.category || 'Geral';
+        const entryData = { ...financialForm, category };
+
         let error;
-        if (entryData.id) {
+        if (financialForm.id) {
             const { id, ...updateData } = entryData;
             const { error: updError } = await supabase.from('financial_entries').update(updateData).eq('id', id);
             error = updError;
@@ -316,35 +502,119 @@ const AdminDashboard: React.FC = () => {
             const { error: insError } = await supabase.from('financial_entries').insert([entryData]);
             error = insError;
         }
-        if (error) alert(error.message);
-        else fetchData();
+
+        if (error) showNotification(`Erro ao salvar lançamento: ${error.message}`, 'error');
+        else {
+            showNotification('Lançamento financeiro gravado!');
+            setIsFinancialModalOpen(false);
+            fetchData();
+        }
     }
 
     async function handleMarkAsPaid(entry: FinancialEntry) {
         if (entry.status === 'paid') return;
 
         const bankId = entry.bank_account_id || bankAccounts[0]?.id;
-        if (!bankId) { alert('Selecione uma conta bancária!'); return; }
+        if (!bankId) { showNotification('Configure uma conta bancária primeiro!', 'error'); return; }
 
         const bank = bankAccounts.find(b => b.id === bankId);
         if (!bank) return;
 
-        // Calculate new balance
         const newBalance = entry.type === 'receivable' ? bank.balance + entry.amount : bank.balance - entry.amount;
 
-        // 1. Update bank balance
         const { error: bankError } = await supabase.from('bank_accounts').update({ balance: newBalance }).eq('id', bankId);
-        if (bankError) { alert(bankError.message); return; }
+        if (bankError) { showNotification(`Erro no banco: ${bankError.message}`, 'error'); return; }
 
-        // 2. Update entry status
         const { error: entryError } = await supabase.from('financial_entries').update({
             status: 'paid',
             payment_date: new Date().toISOString().split('T')[0],
             bank_account_id: bankId
         }).eq('id', entry.id);
 
-        if (entryError) alert(entryError.message);
-        else fetchData();
+        if (entryError) showNotification(`Erro ao liquidar: ${entryError.message}`, 'error');
+        else {
+            showNotification('Lançamento liquidado com sucesso!');
+            fetchData();
+        }
+    }
+
+    async function handleDeleteFinancial(id: string) {
+        askConfirmation(
+            'Excluir Lançamento',
+            'Deseja excluir este lançamento?',
+            async () => {
+                const { error } = await supabase.from('financial_entries').delete().eq('id', id);
+                if (error) showNotification(`Erro ao excluir lançamento: ${error.message}`, 'error');
+                else {
+                    showNotification('Lançamento financeiro removido.');
+                    fetchData();
+                }
+            }
+        );
+    }
+
+    // --- Accounts/Cards/Categories Handlers ---
+    async function handleSaveAccount(e: React.FormEvent) {
+        e.preventDefault();
+        let error;
+        const payload = { ...accountForm };
+        if (accountForm.id) {
+            const { id, ...data } = payload;
+            const { error: err } = await supabase.from('bank_accounts').update(data).eq('id', id);
+            error = err;
+        } else {
+            const { error: err } = await supabase.from('bank_accounts').insert([payload]);
+            error = err;
+        }
+        if (error) showNotification(`Erro no banco: ${error.message}`, 'error');
+        else {
+            showNotification(accountForm.id ? 'Conta atualizada!' : 'Conta criada!');
+            setIsAccountModalOpen(false);
+            setAccountForm({ balance: 0 });
+            fetchData();
+        }
+    }
+
+    async function handleSaveCard(e: React.FormEvent) {
+        e.preventDefault();
+        let error;
+        const payload = { ...cardForm };
+        if (cardForm.id) {
+            const { id, ...data } = payload;
+            const { error: err } = await supabase.from('credit_cards').update(data).eq('id', id);
+            error = err;
+        } else {
+            const { error: err } = await supabase.from('credit_cards').insert([payload]);
+            error = err;
+        }
+        if (error) showNotification(`Erro no cartão: ${error.message}`, 'error');
+        else {
+            showNotification(cardForm.id ? 'Cartão atualizado!' : 'Cartão registrado!');
+            setIsCardModalOpen(false);
+            setCardForm({ limit_amount: 0, current_balance: 0 });
+            fetchData();
+        }
+    }
+
+    async function handleSaveCategory(e: React.FormEvent) {
+        e.preventDefault();
+        let error;
+        const payload = { ...categoryForm };
+        if (categoryForm.id) {
+            const { id, ...data } = payload;
+            const { error: err } = await supabase.from('financial_categories').update(data).eq('id', id);
+            error = err;
+        } else {
+            const { error: err } = await supabase.from('financial_categories').insert([payload]);
+            error = err;
+        }
+        if (error) showNotification(`Erro na categoria: ${error.message}`, 'error');
+        else {
+            showNotification(categoryForm.id ? 'Categoria atualizada!' : 'Categoria criada!');
+            setIsCategoryModalOpen(false);
+            setCategoryForm({ type: 'expense' });
+            fetchData();
+        }
     }
 
     // --- Asset Helpers ---
@@ -361,16 +631,16 @@ const AdminDashboard: React.FC = () => {
             const { error: updateError } = await supabase.from('reminder_settings').update({ media_url: publicUrl }).eq('key', 'default');
             if (updateError) throw updateError;
             setSettings({ ...settings, media_url: publicUrl });
-            alert('Arquivo atualizado!');
+            showNotification('Arquivo de mídia atualizado!');
         } catch (error: any) {
-            alert(error.message);
+            showNotification(`Erro no upload: ${error.message}`, 'error');
         } finally { setUploading(false); }
     }
 
     async function updateMessage() {
         const { error } = await supabase.from('reminder_settings').update({ message_template: settings.message_template }).eq('key', 'default');
-        if (error) alert(error.message);
-        else alert('Mensagem atualizada!');
+        if (error) showNotification(`Erro ao salvar: ${error.message}`, 'error');
+        else showNotification('Template de mensagem atualizado!');
     }
 
     // --- UI Helpers ---
@@ -382,6 +652,8 @@ const AdminDashboard: React.FC = () => {
             case 'sales': return 'shopping_cart';
             case 'resellers': return 'handshake';
             case 'finances': return 'payments';
+            case 'accounts': return 'account_balance';
+            case 'categories': return 'category';
             case 'settings': return 'settings';
             default: return 'circle';
         }
@@ -413,14 +685,14 @@ const AdminDashboard: React.FC = () => {
                 <div className="p-8">
                     <img src="/logo.png" alt="Nutrabene" className="h-10 mb-8" />
                     <nav className="space-y-1">
-                        {['dashboard', 'clients', 'inventory', 'sales', 'resellers', 'finances', 'settings'].map((tab) => (
+                        {['dashboard', 'clients', 'inventory', 'sales', 'resellers', 'finances', 'accounts', 'categories', 'settings'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab as any)}
                                 className={`w-full flex items-center px-4 py-4 rounded-xl font-bold text-sm transition-all ${activeTab === tab ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'}`}
                             >
                                 <span className="material-symbols-outlined mr-3">{getTabIcon(tab)}</span>
-                                <span className="capitalize">{tab === 'clients' ? 'Clientes' : tab === 'inventory' ? 'Estoque' : tab === 'sales' ? 'Vendas' : tab === 'resellers' ? 'Revendedores' : tab === 'finances' ? 'Financeiro' : tab === 'settings' ? 'Configurações' : 'Dashboard'}</span>
+                                <span className="capitalize">{tab === 'clients' ? 'Clientes' : tab === 'inventory' ? 'Estoque' : tab === 'sales' ? 'Vendas' : tab === 'resellers' ? 'Revendedores' : tab === 'finances' ? 'Financeiro' : tab === 'accounts' ? 'Contas / Cartões' : tab === 'categories' ? 'Categorias' : tab === 'settings' ? 'Configurações' : 'Dashboard'}</span>
                             </button>
                         ))}
                     </nav>
@@ -712,8 +984,9 @@ const AdminDashboard: React.FC = () => {
                                                 <th className="px-8 py-5">Produto / Cliente</th>
                                                 <th className="px-8 py-5">Vendedor</th>
                                                 <th className="px-8 py-5 text-center">Quant.</th>
-                                                <th className="px-8 py-5">Total</th>
-                                                <th className="px-8 py-5">Status</th>
+                                                <th className="px-8 py-5 text-right">Total</th>
+                                                <th className="px-8 py-5 text-center">Status</th>
+                                                <th className="px-8 py-5 text-center">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y text-sm">
@@ -731,11 +1004,21 @@ const AdminDashboard: React.FC = () => {
                                                         <div className="text-sm text-gray-600 font-bold">{resellers.find(r => r.id === s.reseller_id)?.name || 'Direta'}</div>
                                                     </td>
                                                     <td className="px-8 py-5 text-center font-bold">{s.quantity}</td>
-                                                    <td className="px-8 py-5 font-black text-primary">R$ {s.total_price.toLocaleString('pt-BR')}</td>
-                                                    <td className="px-8 py-5">
+                                                    <td className="px-8 py-5 text-right font-black text-primary text-lg">R$ {s.total_price.toLocaleString('pt-BR')}</td>
+                                                    <td className="px-8 py-5 text-center">
                                                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${s.payment_status === 'paid' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
                                                             {s.payment_status === 'paid' ? 'Pago' : 'Pendente'}
                                                         </span>
+                                                    </td>
+                                                    <td className="px-8 py-5">
+                                                        <div className="flex justify-center space-x-2">
+                                                            <button onClick={() => { setSaleForm(s); setIsSaleModalOpen(true); }} className="h-8 w-8 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                <span className="material-symbols-outlined text-sm">edit</span>
+                                                            </button>
+                                                            <button onClick={() => handleDeleteSale(s.id)} className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                <span className="material-symbols-outlined text-sm">delete</span>
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -757,8 +1040,8 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <button
                                 onClick={() => {
-                                    const name = prompt('Nome do Revendedor:');
-                                    if (name) handleSaveReseller({ preventDefault: () => { } } as any, { name, commission_rate: 20 });
+                                    setResellerForm({ name: '', commission_rate: 20 });
+                                    setIsResellerModalOpen(true);
                                 }}
                                 className="bg-primary text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-primary/20 flex items-center"
                             >
@@ -774,6 +1057,7 @@ const AdminDashboard: React.FC = () => {
                                             {r.name.substring(0, 2).toUpperCase()}
                                         </div>
                                         <div className="flex space-x-2">
+                                            <button onClick={() => { setResellerForm(r); setIsResellerModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined">edit</span></button>
                                             <button onClick={() => handleDeleteReseller(r.id)} className="text-red-400 hover:text-red-600"><span className="material-symbols-outlined">delete</span></button>
                                         </div>
                                     </div>
@@ -791,57 +1075,46 @@ const AdminDashboard: React.FC = () => {
                 {/* Finance Tab */}
                 {activeTab === 'finances' && (
                     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {bankAccounts.map(bank => (
-                                <div key={bank.id} className="bg-white p-8 rounded-3xl border shadow-sm relative overflow-hidden group">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                        <span className="material-symbols-outlined text-4xl">account_balance</span>
-                                    </div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{bank.name}</p>
-                                    <p className="text-3xl font-black text-gray-800">R$ {bank.balance.toLocaleString('pt-BR')}</p>
-                                </div>
-                            ))}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saldo Total Bancos</p>
+                                <p className="text-3xl font-black text-indigo-600">R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR')}</p>
+                            </div>
+                            <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contas a Receber</p>
+                                <p className="text-3xl font-black text-green-600">R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR')}</p>
+                            </div>
+                            <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contas a Pagar</p>
+                                <p className="text-3xl font-black text-red-500">R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR')}</p>
+                            </div>
                             <button
                                 onClick={() => {
-                                    const desc = prompt('Descrição do lançamento:');
-                                    const val = prompt('Valor (ex: 150.00):');
-                                    const type = confirm('É uma RECEITA? (OK para sim, Cancel para DESPESA)') ? 'receivable' : 'payable';
-                                    if (desc && val) handleSaveFinancialEntry({ preventDefault: () => { } } as any, {
-                                        type,
-                                        description: desc,
-                                        amount: parseFloat(val.replace(',', '.')),
+                                    setFinancialForm({
+                                        type: 'payable',
                                         due_date: new Date().toISOString().split('T')[0],
-                                        status: 'pending',
-                                        category: 'Manual'
+                                        status: 'pending'
                                     });
+                                    setIsFinancialModalOpen(true);
                                 }}
-                                className="bg-primary/5 text-primary p-8 rounded-3xl border border-primary/20 font-black flex items-center justify-center hover:bg-primary hover:text-white transition-all group shadow-sm"
+                                className="bg-primary text-white p-8 rounded-3xl shadow-xl shadow-primary/20 font-black flex items-center justify-center hover:scale-105 transition-all"
                             >
-                                <span className="material-symbols-outlined mr-2 group-hover:rotate-90 transition-transform">add_circle</span> Novo Lançamento Manual
+                                <span className="material-symbols-outlined mr-2">add_circle</span> Novo Lançamento
                             </button>
                         </div>
 
                         <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
-                            <div className="p-8 border-b flex justify-between items-center">
-                                <h2 className="text-xl font-bold">Fluxo de Caixa / Próximos Lançamentos</h2>
-                                <div className="flex space-x-2">
-                                    <div className="flex items-center text-xs font-bold text-green-500 bg-green-50 px-3 py-1 rounded-full border border-green-100 italic">
-                                        Entradas: R$ {financialEntries.filter(e => e.type === 'receivable').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR')}
-                                    </div>
-                                    <div className="flex items-center text-xs font-bold text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 italic">
-                                        Saídas: R$ {financialEntries.filter(e => e.type === 'payable').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR')}
-                                    </div>
-                                </div>
+                            <div className="p-8 border-b flex justify-between items-center bg-gray-50/50">
+                                <h2 className="text-xl font-bold">Fluxo de Caixa / Movimentações</h2>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full">
                                     <thead className="bg-gray-50 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                         <tr>
                                             <th className="px-8 py-5">Vencimento</th>
-                                            <th className="px-8 py-5">Descrição</th>
-                                            <th className="px-8 py-5">Valor</th>
-                                            <th className="px-8 py-5">Tipo</th>
-                                            <th className="px-8 py-5">Status</th>
+                                            <th className="px-8 py-5">Descrição / Categoria</th>
+                                            <th className="px-8 py-5 text-right">Valor</th>
+                                            <th className="px-8 py-5 text-center">Status</th>
                                             <th className="px-8 py-5 text-center">Ações</th>
                                         </tr>
                                     </thead>
@@ -851,32 +1124,32 @@ const AdminDashboard: React.FC = () => {
                                                 <td className="px-8 py-5 font-bold text-gray-400">{new Date(entry.due_date).toLocaleDateString('pt-BR')}</td>
                                                 <td className="px-8 py-5">
                                                     <div className="font-black text-gray-800">{entry.description}</div>
-                                                    <div className="text-[10px] text-gray-400 uppercase">{entry.category}</div>
+                                                    <div className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">
+                                                        {categories.find(c => c.id === (entry as any).category_id)?.name || entry.category}
+                                                    </div>
                                                 </td>
-                                                <td className={`px-8 py-5 font-black text-lg ${entry.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
+                                                <td className={`px-8 py-5 text-right font-black text-lg ${entry.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
                                                     {entry.type === 'receivable' ? '+' : '-'} R$ {entry.amount.toLocaleString('pt-BR')}
                                                 </td>
-                                                <td className="px-8 py-5">
-                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${entry.type === 'receivable' ? 'text-green-400' : 'text-red-400'}`}>
-                                                        {entry.type === 'receivable' ? 'Entrada' : 'Saída'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-8 py-5">
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${entry.status === 'paid' ? 'bg-blue-50 text-blue-500 border border-blue-100' : 'bg-amber-50 text-amber-500 border border-amber-100'}`}>
-                                                        {entry.status === 'paid' ? 'Liquidado' : 'Em Aberto'}
-                                                    </span>
-                                                </td>
                                                 <td className="px-8 py-5 text-center">
-                                                    {entry.status !== 'paid' ? (
-                                                        <button
-                                                            onClick={() => handleMarkAsPaid(entry)}
-                                                            className="bg-primary text-white text-[10px] font-black px-6 py-2.5 rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all"
-                                                        >
-                                                            EFETUAR BAIXA
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${entry.status === 'paid' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                        {entry.status === 'paid' ? 'Liquidado' : 'Aguardando'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-5">
+                                                    <div className="flex justify-center space-x-2">
+                                                        {entry.status !== 'paid' && (
+                                                            <button onClick={() => handleMarkAsPaid(entry)} title="Liquidar" className="h-8 w-8 text-green-500 hover:bg-green-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                <span className="material-symbols-outlined text-sm">check_circle</span>
+                                                            </button>
+                                                        )}
+                                                        <button onClick={() => { setFinancialForm(entry); setIsFinancialModalOpen(true); }} className="h-8 w-8 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                            <span className="material-symbols-outlined text-sm">edit</span>
                                                         </button>
-                                                    ) : (
-                                                        <span className="material-symbols-outlined text-green-500">check_circle</span>
-                                                    )}
+                                                        <button onClick={() => handleDeleteFinancial(entry.id)} className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                            <span className="material-symbols-outlined text-sm">delete</span>
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -887,6 +1160,116 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
 
+                {/* Accounts & Cards Tab */}
+                {activeTab === 'accounts' && (
+                    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                            {/* Bank Accounts Section */}
+                            <section className="space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-2xl font-black text-gray-800">Contas Bancárias</h2>
+                                    <button onClick={() => { setAccountForm({ balance: 0 }); setIsAccountModalOpen(true); }} className="h-10 w-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center hover:bg-primary hover:text-white transition-all shadow-sm">
+                                        <span className="material-symbols-outlined">add</span>
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    {bankAccounts.map(bank => (
+                                        <div key={bank.id} className="bg-white p-6 rounded-3xl border shadow-sm flex justify-between items-center group">
+                                            <div>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{bank.name}</p>
+                                                <p className="text-2xl font-black text-gray-800">R$ {bank.balance.toLocaleString('pt-BR')}</p>
+                                            </div>
+                                            <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => { setAccountForm(bank); setIsAccountModalOpen(true); }} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors">
+                                                    <span className="material-symbols-outlined text-sm">edit</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            {/* Credit Cards Section */}
+                            <section className="space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-2xl font-black text-gray-800">Cartões de Crédito</h2>
+                                    <button onClick={() => { setCardForm({ limit_amount: 0, current_balance: 0 }); setIsCardModalOpen(true); }} className="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                                        <span className="material-symbols-outlined">credit_card</span>
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    {creditCards.map(card => (
+                                        <div key={card.id} className="bg-white p-6 rounded-3xl border shadow-sm relative overflow-hidden group">
+                                            <div className="absolute top-0 right-0 p-4">
+                                                <button onClick={() => { setCardForm(card); setIsCardModalOpen(true); }} className="text-gray-300 hover:text-blue-500 p-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <span className="material-symbols-outlined text-sm">edit</span>
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{card.name}</p>
+                                            <div className="flex justify-between items-end">
+                                                <div>
+                                                    <p className="text-xs text-gray-400 font-bold uppercase">Fatura Atual</p>
+                                                    <p className="text-2xl font-black text-red-500">R$ {card.current_balance.toLocaleString('pt-BR')}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] text-gray-300 font-bold lowercase">Limite: R$ {card.limit_amount.toLocaleString('pt-BR')}</p>
+                                                    <p className="text-[10px] text-gray-400 font-black">Vence dia {card.due_day}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                )}
+
+                {/* Categories Tab */}
+                {activeTab === 'categories' && (
+                    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
+                        <div className="bg-white p-8 rounded-3xl border shadow-sm flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-bold">Categorias Financeiras</h2>
+                                <p className="text-sm text-gray-400">Organize seus gastos e receitas por tipo.</p>
+                            </div>
+                            <button onClick={() => { setCategoryForm({ type: 'expense' }); setIsCategoryModalOpen(true); }} className="bg-primary text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-primary/20 flex items-center">
+                                <span className="material-symbols-outlined mr-2">category</span> Nova Categoria
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                            <section className="space-y-4">
+                                <h3 className="text-xs font-black text-green-500 uppercase tracking-widest ml-4">Receitas</h3>
+                                <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+                                    <div className="divide-y">
+                                        {categories.filter(c => c.type === 'income').map(cat => (
+                                            <div key={cat.id} className="p-5 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                                                <span className="font-bold text-gray-700">{cat.name}</span>
+                                                <button onClick={() => { setCategoryForm(cat); setIsCategoryModalOpen(true); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                    <span className="material-symbols-outlined text-sm">edit</span>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </section>
+                            <section className="space-y-4">
+                                <h3 className="text-xs font-black text-red-500 uppercase tracking-widest ml-4">Despesas</h3>
+                                <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+                                    <div className="divide-y">
+                                        {categories.filter(c => c.type === 'expense').map(cat => (
+                                            <div key={cat.id} className="p-5 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                                                <span className="font-bold text-gray-700">{cat.name}</span>
+                                                <button onClick={() => { setCategoryForm(cat); setIsCategoryModalOpen(true); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                    <span className="material-symbols-outlined text-sm">edit</span>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                )}
                 {/* Settings Tab */}
                 {activeTab === 'settings' && (
                     <div className="max-w-4xl space-y-8 animate-in slide-in-from-bottom-4 duration-300">
@@ -940,210 +1323,373 @@ const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Notification Toast */}
+                {notification && (
+                    <div className={`fixed top-10 right-10 z-[200] px-8 py-5 rounded-[25px] font-black shadow-2xl animate-in slide-in-from-right-10 duration-500 flex items-center ${notification.type === 'success' ? 'bg-green-500 text-white shadow-green-200' : 'bg-red-500 text-white shadow-red-200'}`}>
+                        <span className="material-symbols-outlined mr-3">{notification.type === 'success' ? 'check_circle' : 'error'}</span>
+                        {notification.message}
+                    </div>
+                )}
+
+                {/* Confirm Modal */}
+                {confirmModal?.isOpen && (
+                    <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+                        <div className="bg-white w-full max-w-sm rounded-[32px] p-10 shadow-2xl text-center">
+                            <h3 className="text-xl font-black text-gray-800 mb-2">{confirmModal.title}</h3>
+                            <p className="text-sm text-gray-500 mb-8">{confirmModal.message}</p>
+                            <div className="flex space-x-4">
+                                <button
+                                    onClick={() => setConfirmModal(null)}
+                                    className="flex-1 py-4 font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        confirmModal.onConfirm();
+                                        setConfirmModal(null);
+                                    }}
+                                    className="flex-1 bg-red-500 text-white py-4 rounded-2xl font-black shadow-lg shadow-red-200"
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
 
-            {/* Modals with Premium Glassmorphism Effect */}
-            {isModalOpen && (
+            {/* Reseller Modal */}
+            {isResellerModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-sm rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-2xl font-black text-gray-800">{resellerForm.id ? 'Editar Parceiro' : 'Novo Parceiro'}</h2>
+                            <button onClick={() => setIsResellerModalOpen(false)} className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400"><span className="material-symbols-outlined text-sm">close</span></button>
+                        </div>
+                        <form onSubmit={handleSaveReseller} className="space-y-6">
+                            <input type="text" value={resellerForm.name || ''} onChange={e => setResellerForm({ ...resellerForm, name: e.target.value })} placeholder="Nome do Parceiro" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            <input type="text" value={resellerForm.whatsapp || ''} onChange={e => setResellerForm({ ...resellerForm, whatsapp: e.target.value })} placeholder="WhatsApp" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Taxa de Comissão (%)</label>
+                                <input type="number" value={resellerForm.commission_rate || 20} onChange={e => setResellerForm({ ...resellerForm, commission_rate: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            </div>
+                            <button type="submit" className="w-full bg-primary text-white py-5 rounded-[20px] font-black shadow-xl">Salvar Parceiro</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Financial Entry Modal */}
+            {isFinancialModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
                     <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
                         <div className="flex justify-between items-center mb-10">
-                            <h2 className="text-3xl font-black text-gray-800">{editingClient?.id ? 'Editar Cadastro' : 'Novo Cliente'}</h2>
-                            <button onClick={() => setIsModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                            <h2 className="text-3xl font-black text-gray-800">{financialForm.id ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
+                            <button onClick={() => setIsFinancialModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
                                 <span className="material-symbols-outlined">close</span>
                             </button>
                         </div>
-                        <form onSubmit={handleSaveClient} className="space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Dados Principais</label>
-                                <input type="text" value={editingClient?.name || ''} onChange={e => setEditingClient({ ...editingClient, name: e.target.value })} placeholder="Nome Completo" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                            </div>
+                        <form onSubmit={handleSaveFinancialEntry} className="space-y-6">
                             <div className="grid grid-cols-2 gap-4">
-                                <input type="email" value={editingClient?.email || ''} onChange={e => setEditingClient({ ...editingClient, email: e.target.value })} placeholder="Email Principal" className="p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                                <input type="text" value={editingClient?.whatsapp || ''} onChange={e => setEditingClient({ ...editingClient, whatsapp: e.target.value })} placeholder="WhatsApp" className="p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                <button type="button" onClick={() => setFinancialForm({ ...financialForm, type: 'receivable' })} className={`py-4 rounded-2xl font-black transition-all ${financialForm.type === 'receivable' ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-gray-50 text-gray-400'}`}>RECEITA</button>
+                                <button type="button" onClick={() => setFinancialForm({ ...financialForm, type: 'payable' })} className={`py-4 rounded-2xl font-black transition-all ${financialForm.type === 'payable' ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-gray-50 text-gray-400'}`}>DESPESA</button>
                             </div>
+                            <input type="text" value={financialForm.description || ''} onChange={e => setFinancialForm({ ...financialForm, description: e.target.value })} placeholder="Descrição" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                             <div className="grid grid-cols-2 gap-4">
-                                <label className="block">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nascimento</span>
-                                    <input type="date" value={editingClient?.birth_date || ''} onChange={e => setEditingClient({ ...editingClient, birth_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                                </label>
-                                <label className="block">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Check-in Sono</span>
-                                    <input type="time" value={editingClient?.sleep_schedule || ''} onChange={e => setEditingClient({ ...editingClient, sleep_schedule: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                                </label>
+                                <input type="number" step="0.01" value={financialForm.amount || ''} onChange={e => setFinancialForm({ ...financialForm, amount: parseFloat(e.target.value) })} placeholder="Valor (R$)" className="p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                <input type="date" value={financialForm.due_date || ''} onChange={e => setFinancialForm({ ...financialForm, due_date: e.target.value })} className="p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Origem do Lead</label>
-                                <select value={editingClient?.purchase_location || 'site_oficial'} onChange={e => setEditingClient({ ...editingClient, purchase_location: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
-                                    <option value="site_oficial">🛒 Site Oficial</option>
-                                    <option value="farmacia">🏥 Farmácia / Loja</option>
-                                    <option value="clinica">🩺 Clínica Parceira</option>
-                                    <option value="revendedor">🤝 Revendedor Autônomo</option>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Categoria</label>
+                                <select value={(financialForm as any).category_id || ''} onChange={e => setFinancialForm({ ...financialForm, category_id: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
+                                    <option value="">Selecione a Categoria</option>
+                                    {categories.filter(c => c.type === financialForm.type).map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                                 </select>
                             </div>
                             <div className="flex space-x-6 pt-6">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Descartar</button>
-                                <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Sincronizar Dados</button>
+                                <button type="button" onClick={() => setIsFinancialModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400">Descartar</button>
+                                <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30">Gravar Lançamento</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
 
-            {isProductModalOpen && (
+            {/* Bank Account Modal */}
+            {isAccountModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-                    <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
-                        <div className="flex justify-between items-center mb-10">
-                            <h2 className="text-3xl font-black text-gray-800">{editingProduct?.id ? 'Configurar SKU' : 'Novo SKU'}</h2>
-                            <button onClick={() => setIsProductModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
+                    <div className="bg-white w-full max-w-sm rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-2xl font-black text-gray-800">{accountForm.id ? 'Editar Conta' : 'Nova Conta'}</h2>
+                            <button onClick={() => setIsAccountModalOpen(false)} className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400"><span className="material-symbols-outlined text-sm">close</span></button>
                         </div>
-                        <form onSubmit={handleSaveProduct} className="space-y-6">
-                            <input type="text" value={editingProduct?.id || ''} onChange={e => setEditingProduct({ ...editingProduct, id: e.target.value })} placeholder="ID Único / SKU (ex: ltn-200ml)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all disabled:opacity-30" disabled={!!editingProduct?.id && products.some(p => p.id === editingProduct.id)} required />
-                            <input type="text" value={editingProduct?.name || ''} onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })} placeholder="Nome Comercial do Produto" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                        <form onSubmit={handleSaveAccount} className="space-y-6">
+                            <input type="text" value={accountForm.name || ''} onChange={e => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome do Banco / Carteira" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            <input type="number" step="0.01" value={accountForm.balance || 0} onChange={e => setAccountForm({ ...accountForm, balance: parseFloat(e.target.value) })} placeholder="Saldo Inicial (R$)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            <button type="submit" className="w-full bg-primary text-white py-5 rounded-[20px] font-black shadow-xl">Salvar Conta</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Credit Card Modal */}
+            {isCardModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-sm rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-2xl font-black text-gray-800">{cardForm.id ? 'Editar Cartão' : 'Novo Cartão'}</h2>
+                            <button onClick={() => setIsCardModalOpen(false)} className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400"><span className="material-symbols-outlined text-sm">close</span></button>
+                        </div>
+                        <form onSubmit={handleSaveCard} className="space-y-6">
+                            <input type="text" value={cardForm.name || ''} onChange={e => setCardForm({ ...cardForm, name: e.target.value })} placeholder="Nome do Cartão" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
                             <div className="grid grid-cols-2 gap-4">
                                 <label className="block">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Custo Unitário (R$)</span>
-                                    <input type="number" step="0.01" value={editingProduct?.cost_price || 0} onChange={e => setEditingProduct({ ...editingProduct, cost_price: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Fechamento</span>
+                                    <input type="number" min="1" max="31" value={cardForm.closing_day || ''} onChange={e => setCardForm({ ...cardForm, closing_day: parseInt(e.target.value) })} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1" required />
                                 </label>
                                 <label className="block">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">PVP (Venda R$)</span>
-                                    <input type="number" step="0.01" value={editingProduct?.price || 0} onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vencimento</span>
+                                    <input type="number" min="1" max="31" value={cardForm.due_day || ''} onChange={e => setCardForm({ ...cardForm, due_day: parseInt(e.target.value) })} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1" required />
                                 </label>
                             </div>
-                            <label className="block">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Estoque Físico Disponível</span>
-                                <input type="number" value={editingProduct?.stock_quantity || 0} onChange={e => setEditingProduct({ ...editingProduct, stock_quantity: parseInt(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                            </label>
-                            <div className="flex space-x-6 pt-6">
-                                <button type="button" onClick={() => setIsProductModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Voltar</button>
-                                <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Confirmar Registro</button>
-                            </div>
+                            <input type="number" step="0.01" value={cardForm.limit_amount || 0} onChange={e => setCardForm({ ...cardForm, limit_amount: parseFloat(e.target.value) })} placeholder="Limite Total (R$)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-[20px] font-black shadow-xl">Salvar Cartão</button>
                         </form>
                     </div>
                 </div>
             )}
-            {isSaleModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-                    <div className="bg-white w-full max-w-2xl rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-10">
-                            <h2 className="text-3xl font-black text-gray-800">Lançar Nova Venda</h2>
-                            <button onClick={() => setIsSaleModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-                        <form onSubmit={handleRegisterSale} className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Produto</label>
-                                    <select
-                                        value={saleForm.product_id || ''}
-                                        onChange={e => {
-                                            const p = products.find(prod => prod.id === e.target.value);
-                                            setSaleForm({
-                                                ...saleForm,
-                                                product_id: e.target.value,
-                                                unit_price: p?.price || 0,
-                                                total_price: (p?.price || 0) * (saleForm.quantity || 1)
-                                            });
-                                        }}
-                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
-                                        required
-                                    >
-                                        <option value="">Selecione o Produto</option>
-                                        {products.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price}</option>)}
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Cliente</label>
-                                    <select
-                                        value={saleForm.client_id || ''}
-                                        onChange={e => setSaleForm({ ...saleForm, client_id: e.target.value })}
-                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
-                                    >
-                                        <option value="">Selecione o Cliente (Opcional)</option>
-                                        {registrations.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                    </select>
-                                </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Category Modal */}
+            {isCategoryModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-sm rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-2xl font-black text-gray-800">{categoryForm.id ? 'Editar Categoria' : 'Nova Categoria'}</h2>
+                            <button onClick={() => setIsCategoryModalOpen(false)} className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400"><span className="material-symbols-outlined text-sm">close</span></button>
+                        </div>
+                        <form onSubmit={handleSaveCategory} className="space-y-6">
+                            <input type="text" value={categoryForm.name || ''} onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })} placeholder="Nome da Categoria" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            <div className="grid grid-cols-2 gap-4">
+                                <button type="button" onClick={() => setCategoryForm({ ...categoryForm, type: 'income' })} className={`py-4 rounded-2xl font-black transition-all ${categoryForm.type === 'income' ? 'bg-green-500 text-white' : 'bg-gray-50 text-gray-400'}`}>RECEITA</button>
+                                <button type="button" onClick={() => setCategoryForm({ ...categoryForm, type: 'expense' })} className={`py-4 rounded-2xl font-black transition-all ${categoryForm.type === 'expense' ? 'bg-red-500 text-white' : 'bg-gray-50 text-gray-400'}`}>DESPESA</button>
+                            </div>
+                            <button type="submit" className="w-full bg-primary text-white py-5 rounded-[20px] font-black shadow-xl">Salvar Categoria</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modals with Premium Glassmorphism Effect */}
+            {
+                isModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                        <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
+                            <div className="flex justify-between items-center mb-10">
+                                <h2 className="text-3xl font-black text-gray-800">{editingClient?.id ? 'Editar Cadastro' : 'Novo Cliente'}</h2>
+                                <button onClick={() => setIsModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+                            <form onSubmit={handleSaveClient} className="space-y-6">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vendedor / Revendedor</label>
-                                    <select
-                                        value={saleForm.reseller_id || ''}
-                                        onChange={e => setSaleForm({ ...saleForm, reseller_id: e.target.value })}
-                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
-                                    >
-                                        <option value="">Venda Direta (Sem Revendedor)</option>
-                                        {resellers.map(r => <option key={r.id} value={r.id}>{r.name} ({r.commission_rate}%)</option>)}
-                                    </select>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Dados Principais</label>
+                                    <input type="text" value={editingClient?.name || ''} onChange={e => setEditingClient({ ...editingClient, name: e.target.value })} placeholder="Nome Completo" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
+                                    <input type="email" value={editingClient?.email || ''} onChange={e => setEditingClient({ ...editingClient, email: e.target.value })} placeholder="Email Principal" className="p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    <input type="text" value={editingClient?.whatsapp || ''} onChange={e => setEditingClient({ ...editingClient, whatsapp: e.target.value })} placeholder="WhatsApp" className="p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <label className="block">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nascimento</span>
+                                        <input type="date" value={editingClient?.birth_date || ''} onChange={e => setEditingClient({ ...editingClient, birth_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Check-in Sono</span>
+                                        <input type="time" value={editingClient?.sleep_schedule || ''} onChange={e => setEditingClient({ ...editingClient, sleep_schedule: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    </label>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Origem do Lead</label>
+                                    <select value={editingClient?.purchase_location || 'site_oficial'} onChange={e => setEditingClient({ ...editingClient, purchase_location: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
+                                        <option value="site_oficial">🛒 Site Oficial</option>
+                                        <option value="farmacia">🏥 Farmácia / Loja</option>
+                                        <option value="clinica">🩺 Clínica Parceira</option>
+                                        <option value="revendedor">🤝 Revendedor Autônomo</option>
+                                    </select>
+                                </div>
+                                <div className="flex space-x-6 pt-6">
+                                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Descartar</button>
+                                    <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Sincronizar Dados</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                isProductModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                        <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
+                            <div className="flex justify-between items-center mb-10">
+                                <h2 className="text-3xl font-black text-gray-800">{editingProduct?.id ? 'Configurar SKU' : 'Novo SKU'}</h2>
+                                <button onClick={() => setIsProductModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+                            <form onSubmit={handleSaveProduct} className="space-y-6">
+                                <input type="text" value={editingProduct?.id || ''} onChange={e => setEditingProduct({ ...editingProduct, id: e.target.value })} placeholder="ID Único / SKU (ex: ltn-200ml)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all disabled:opacity-30" disabled={!!editingProduct?.id && products.some(p => p.id === editingProduct.id)} required />
+                                <input type="text" value={editingProduct?.name || ''} onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })} placeholder="Nome Comercial do Produto" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <label className="block">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Custo Unitário (R$)</span>
+                                        <input type="number" step="0.01" value={editingProduct?.cost_price || 0} onChange={e => setEditingProduct({ ...editingProduct, cost_price: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">PVP (Venda R$)</span>
+                                        <input type="number" step="0.01" value={editingProduct?.price || 0} onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    </label>
+                                </div>
+                                <label className="block">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Estoque Físico Disponível</span>
+                                    <input type="number" value={editingProduct?.stock_quantity || 0} onChange={e => setEditingProduct({ ...editingProduct, stock_quantity: parseInt(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                </label>
+                                <div className="flex space-x-6 pt-6">
+                                    <button type="button" onClick={() => setIsProductModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Voltar</button>
+                                    <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Confirmar Registro</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                isSaleModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                        <div className="bg-white w-full max-w-2xl rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-10">
+                                <h2 className="text-3xl font-black text-gray-800">Lançar Nova Venda</h2>
+                                <button onClick={() => setIsSaleModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+                            <form onSubmit={handleRegisterSale} className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Quantidade</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            value={saleForm.quantity || 1}
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Produto</label>
+                                        <select
+                                            value={saleForm.product_id || ''}
                                             onChange={e => {
-                                                const qty = parseInt(e.target.value);
+                                                const p = products.find(prod => prod.id === e.target.value);
                                                 setSaleForm({
                                                     ...saleForm,
-                                                    quantity: qty,
-                                                    total_price: (saleForm.unit_price || 0) * qty
+                                                    product_id: e.target.value,
+                                                    unit_price: p?.price || 0,
+                                                    total_price: (p?.price || 0) * (saleForm.quantity || 1)
                                                 });
                                             }}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                            required
+                                        >
+                                            <option value="">Selecione o Produto</option>
+                                            {products.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Cliente</label>
+                                        <select
+                                            value={saleForm.client_id || ''}
+                                            onChange={e => setSaleForm({ ...saleForm, client_id: e.target.value })}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                        >
+                                            <option value="">Selecione o Cliente (Opcional)</option>
+                                            {registrations.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vendedor / Revendedor</label>
+                                        <select
+                                            value={saleForm.reseller_id || ''}
+                                            onChange={e => setSaleForm({ ...saleForm, reseller_id: e.target.value })}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                        >
+                                            <option value="">Venda Direta (Sem Revendedor)</option>
+                                            {resellers.map(r => <option key={r.id} value={r.id}>{r.name} ({r.commission_rate}%)</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Quantidade</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={saleForm.quantity || 1}
+                                                onChange={e => {
+                                                    const qty = parseInt(e.target.value);
+                                                    setSaleForm({
+                                                        ...saleForm,
+                                                        quantity: qty,
+                                                        total_price: (saleForm.unit_price || 0) * qty
+                                                    });
+                                                }}
+                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Total (R$)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={saleForm.total_price || 0}
+                                                onChange={e => setSaleForm({ ...saleForm, total_price: parseFloat(e.target.value) })}
+                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-black text-primary"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data da Venda</label>
+                                        <input
+                                            type="date"
+                                            value={saleForm.sale_date || ''}
+                                            onChange={e => setSaleForm({ ...saleForm, sale_date: e.target.value })}
                                             className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
                                             required
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Total (R$)</label>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data de Vencimento</label>
                                         <input
-                                            type="number"
-                                            step="0.01"
-                                            value={saleForm.total_price || 0}
-                                            onChange={e => setSaleForm({ ...saleForm, total_price: parseFloat(e.target.value) })}
-                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-black text-primary"
+                                            type="date"
+                                            value={saleForm.due_date || ''}
+                                            onChange={e => setSaleForm({ ...saleForm, due_date: e.target.value })}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
                                             required
                                         />
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data da Venda</label>
-                                    <input
-                                        type="date"
-                                        value={saleForm.sale_date || ''}
-                                        onChange={e => setSaleForm({ ...saleForm, sale_date: e.target.value })}
-                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
-                                        required
-                                    />
+                                <div className="flex space-x-6 pt-6">
+                                    <button type="button" onClick={() => setIsSaleModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Cancelar</button>
+                                    <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Registrar Venda</button>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data de Vencimento</label>
-                                    <input
-                                        type="date"
-                                        value={saleForm.due_date || ''}
-                                        onChange={e => setSaleForm({ ...saleForm, due_date: e.target.value })}
-                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex space-x-6 pt-6">
-                                <button type="button" onClick={() => setIsSaleModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Cancelar</button>
-                                <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Registrar Venda</button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 
