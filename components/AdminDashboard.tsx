@@ -1429,31 +1429,31 @@ const AdminDashboard: React.FC = () => {
             {/* Financial Entry Modal */}
             {isFinancialModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-                    <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
-                        <div className="flex justify-between items-center mb-10">
-                            <h2 className="text-3xl font-black text-gray-800">{financialForm.id ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
-                            <button onClick={() => setIsFinancialModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
-                                <span className="material-symbols-outlined">close</span>
+                    <div className="bg-white w-full max-w-lg rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh]">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-black text-gray-800">{financialForm.id ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
+                            <button onClick={() => setIsFinancialModalOpen(false)} className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                <span className="material-symbols-outlined text-sm">close</span>
                             </button>
                         </div>
-                        <form onSubmit={handleSaveFinancialEntry} className="space-y-6">
+                        <form onSubmit={handleSaveFinancialEntry} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
-                                <button type="button" onClick={() => setFinancialForm({ ...financialForm, type: 'receivable' })} className={`py-4 rounded-2xl font-black transition-all ${financialForm.type === 'receivable' ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-gray-50 text-gray-400'}`}>RECEITA</button>
-                                <button type="button" onClick={() => setFinancialForm({ ...financialForm, type: 'payable' })} className={`py-4 rounded-2xl font-black transition-all ${financialForm.type === 'payable' ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-gray-50 text-gray-400'}`}>DESPESA</button>
+                                <button type="button" onClick={() => setFinancialForm({ ...financialForm, type: 'receivable' })} className={`py-3 rounded-2xl font-black transition-all ${financialForm.type === 'receivable' ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-gray-50 text-gray-400'}`}>RECEITA</button>
+                                <button type="button" onClick={() => setFinancialForm({ ...financialForm, type: 'payable' })} className={`py-3 rounded-2xl font-black transition-all ${financialForm.type === 'payable' ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-gray-50 text-gray-400'}`}>DESPESA</button>
                             </div>
-                            <input type="text" value={financialForm.description || ''} onChange={e => setFinancialForm({ ...financialForm, description: e.target.value })} placeholder="Descrição" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                            <div className="space-y-2">
+                            <input type="text" value={financialForm.description || ''} onChange={e => setFinancialForm({ ...financialForm, description: e.target.value })} placeholder="Descrição" className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all italic" required />
+                            <div className="space-y-1">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Valor (R$)</label>
-                                <input type="number" step="0.01" value={financialForm.amount || ''} onChange={e => setFinancialForm({ ...financialForm, amount: parseFloat(e.target.value) })} placeholder="0,00" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                <input type="number" step="0.01" value={financialForm.amount || ''} onChange={e => setFinancialForm({ ...financialForm, amount: parseFloat(e.target.value) })} placeholder="0,00" className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-bold text-lg" required />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <label className="block">
+                                <label className="block space-y-1">
                                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data Lançamento</span>
-                                    <input type="date" value={financialForm.entry_date || ''} onChange={e => setFinancialForm({ ...financialForm, entry_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    <input type="date" value={financialForm.entry_date || ''} onChange={e => setFinancialForm({ ...financialForm, entry_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                 </label>
-                                <label className="block">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vencimento / 1ª Parcela</span>
-                                    <input type="date" value={financialForm.due_date || ''} onChange={e => setFinancialForm({ ...financialForm, due_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                <label className="block space-y-1">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vencimento</span>
+                                    <input type="date" value={financialForm.due_date || ''} onChange={e => setFinancialForm({ ...financialForm, due_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                 </label>
                             </div>
 
