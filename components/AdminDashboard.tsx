@@ -23,6 +23,7 @@ interface ProductInventory {
     name: string;
     stock_quantity: number;
     price: number;
+    cost_price: number;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -42,6 +43,9 @@ const AdminDashboard: React.FC = () => {
     // Modal State for CRUD
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClient, setEditingClient] = useState<Partial<Registration> | null>(null);
+
+    const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+    const [editingProduct, setEditingProduct] = useState<Partial<ProductInventory> | null>(null);
 
     // Check current session
     useEffect(() => {
@@ -153,6 +157,42 @@ const AdminDashboard: React.FC = () => {
         setUpdatingStock(null);
     }
 
+    async function handleSaveProduct(e: React.FormEvent) {
+        e.preventDefault();
+        if (!editingProduct) return;
+
+        let error;
+        if (editingProduct.id && products.find(p => p.id === editingProduct.id)) {
+            // Update
+            const { id, ...updateData } = editingProduct;
+            const { error: updError } = await supabase.from('products').update(updateData).eq('id', id);
+            error = updError;
+        } else {
+            // Create
+            const { error: insError } = await supabase.from('products').insert([editingProduct]);
+            error = insError;
+        }
+
+        if (error) {
+            alert(`Erro ao salvar produto: ${error.message}`);
+        } else {
+            setIsProductModalOpen(false);
+            setEditingProduct(null);
+            fetchData();
+            alert('Produto salvo com sucesso!');
+        }
+    }
+
+    async function handleDeleteProduct(id: string) {
+        if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (error) {
+            alert(`Erro ao excluir produto: ${error.message}`);
+        } else {
+            fetchData();
+        }
+    }
+
     // --- Messaging Settings ---
     async function updateMessage() {
         const { error } = await supabase.from('reminder_settings').update({ message_template: settings.message_template }).eq('key', 'default');
@@ -253,7 +293,7 @@ const AdminDashboard: React.FC = () => {
                                 onClick={() => { setEditingClient({ purchase_location: 'site_oficial' }); setIsModalOpen(true); }}
                                 className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center"
                             >
-                                <span className="material-symbols-outlined text-sm mr-1">add</span> Incluir Cliente
+                                <span className="material-symbols-outlined text-sm mr-1">person_add</span> Incluir Cliente
                             </button>
                         </div>
                         <div className="overflow-x-auto">
@@ -295,19 +335,48 @@ const AdminDashboard: React.FC = () => {
 
                 {/* Stock Control Row - Full Width */}
                 <div className="lg:col-span-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div className="bg-white p-6 rounded-3xl border shadow-sm">
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-2">Total Itens em Estoque</p>
+                            <p className="text-3xl font-black text-gray-800">{products.reduce((acc, p) => acc + (p.stock_quantity || 0), 0)}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border shadow-sm">
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-2">Valor Total (Custo)</p>
+                            <p className="text-3xl font-black text-blue-600">
+                                R$ {products.reduce((acc, p) => acc + ((p.stock_quantity || 0) * (p.cost_price || 0)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border shadow-sm">
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-2">Valor Total (Venda)</p>
+                            <p className="text-3xl font-black text-green-600">
+                                R$ {products.reduce((acc, p) => acc + ((p.stock_quantity || 0) * (p.price || 0)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                        </div>
+                    </div>
+
                     <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
-                        <div className="p-8 border-b">
-                            <h2 className="text-xl font-bold">Controle de Estoque</h2>
-                            <p className="text-sm text-gray-500">Gerencie a quantidade disponível dos produtos</p>
+                        <div className="p-8 border-b flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-bold">Controle de Estoque</h2>
+                                <p className="text-sm text-gray-500">Gerencie preços e quantidades</p>
+                            </div>
+                            <button
+                                onClick={() => { setEditingProduct({ stock_quantity: 0, price: 0, cost_price: 0 }); setIsProductModalOpen(true); }}
+                                className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center"
+                            >
+                                <span className="material-symbols-outlined text-sm mr-1">add_box</span> Novo Produto
+                            </button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead className="bg-gray-50 text-left text-xs font-bold text-gray-500 uppercase">
                                     <tr>
                                         <th className="px-6 py-4">Produto</th>
-                                        <th className="px-6 py-4">Preço</th>
-                                        <th className="px-6 py-4 text-center">Quantidade em Estoque</th>
+                                        <th className="px-6 py-4">Preço Custo</th>
+                                        <th className="px-6 py-4">Preço Venda</th>
+                                        <th className="px-6 py-4 text-center">Estoque</th>
                                         <th className="px-6 py-4 text-center">Status</th>
+                                        <th className="px-6 py-4 text-center">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y text-sm">
@@ -317,19 +386,24 @@ const AdminDashboard: React.FC = () => {
                                                 <div className="font-bold">{prod.name}</div>
                                                 <div className="text-gray-500 text-xs">ID: {prod.id}</div>
                                             </td>
-                                            <td className="px-6 py-4 font-medium">
-                                                R$ {Number(prod.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            <td className="px-6 py-4 font-medium text-gray-500 text-xs uppercase">
+                                                <span className="block text-[10px] font-bold text-gray-400 mb-1">Custo</span>
+                                                R$ {Number(prod.cost_price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="px-6 py-4 font-bold text-green-600">
+                                                <span className="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Venda</span>
+                                                R$ {Number(prod.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="flex items-center justify-center space-x-4">
+                                                <div className="flex items-center justify-center space-x-3">
                                                     <button
                                                         onClick={() => handleUpdateStock(prod.id, prod.stock_quantity - 1)}
                                                         disabled={updatingStock === prod.id || prod.stock_quantity <= 0}
                                                         className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-30"
                                                     >
-                                                        <span className="material-symbols-outlined">remove_circle_outline</span>
+                                                        <span className="material-symbols-outlined text-sm">remove_circle_outline</span>
                                                     </button>
-                                                    <span className={`text-lg font-bold w-12 text-center ${prod.stock_quantity <= 5 ? 'text-red-500' : 'text-gray-800'}`}>
+                                                    <span className={`text-sm font-bold w-8 text-center ${prod.stock_quantity <= 5 ? 'text-red-500' : 'text-gray-800'}`}>
                                                         {prod.stock_quantity}
                                                     </span>
                                                     <button
@@ -337,18 +411,28 @@ const AdminDashboard: React.FC = () => {
                                                         disabled={updatingStock === prod.id}
                                                         className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-30"
                                                     >
-                                                        <span className="material-symbols-outlined">add_circle_outline</span>
+                                                        <span className="material-symbols-outlined text-sm">add_circle_outline</span>
                                                     </button>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 {prod.stock_quantity === 0 ? (
-                                                    <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold">Esgotado</span>
+                                                    <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-[10px] font-bold uppercase">Esgotado</span>
                                                 ) : prod.stock_quantity <= 5 ? (
-                                                    <span className="px-3 py-1 bg-amber-100 text-amber-600 rounded-full text-xs font-bold">Baixo Estoque</span>
+                                                    <span className="px-2 py-0.5 bg-amber-100 text-amber-600 rounded-full text-[10px] font-bold uppercase">Baixo</span>
                                                 ) : (
-                                                    <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-xs font-bold">Em Dia</span>
+                                                    <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-full text-[10px] font-bold uppercase">OK</span>
                                                 )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex justify-center space-x-2">
+                                                    <button onClick={() => { setEditingProduct(prod); setIsProductModalOpen(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                        <span className="material-symbols-outlined text-sm">edit</span>
+                                                    </button>
+                                                    <button onClick={() => handleDeleteProduct(prod.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -359,47 +443,46 @@ const AdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* CRUD Modal */}
-            {isModalOpen && (
+            {/* Product CRUD Modal */}
+            {isProductModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
                     <div className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl">
-                        <h2 className="text-2xl font-bold mb-6">{editingClient?.id ? 'Editar Cliente' : 'Novo Cliente'}</h2>
-                        <form onSubmit={handleSaveClient} className="space-y-4">
+                        <h2 className="text-2xl font-bold mb-6">{editingProduct?.id ? 'Editar Produto' : 'Novo Produto'}</h2>
+                        <form onSubmit={handleSaveProduct} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2">
-                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Nome Completo</label>
-                                    <input type="text" value={editingClient?.name || ''} onChange={e => setEditingClient({ ...editingClient, name: e.target.value })} className="w-full p-3 border rounded-xl" required />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">E-mail</label>
-                                    <input type="email" value={editingClient?.email || ''} onChange={e => setEditingClient({ ...editingClient, email: e.target.value })} className="w-full p-3 border rounded-xl" required />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">WhatsApp</label>
-                                    <input type="text" value={editingClient?.whatsapp || ''} onChange={e => setEditingClient({ ...editingClient, whatsapp: e.target.value })} className="w-full p-3 border rounded-xl" placeholder="(00) 00000-0000" required />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Data de Nascimento</label>
-                                    <input type="date" value={editingClient?.birth_date || ''} onChange={e => setEditingClient({ ...editingClient, birth_date: e.target.value })} className="w-full p-3 border rounded-xl" required />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Horário do Sono</label>
-                                    <input type="time" value={editingClient?.sleep_schedule || ''} onChange={e => setEditingClient({ ...editingClient, sleep_schedule: e.target.value })} className="w-full p-3 border rounded-xl" required />
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">ID / Slug do Produto</label>
+                                    <input
+                                        type="text"
+                                        value={editingProduct?.id || ''}
+                                        onChange={e => setEditingProduct({ ...editingProduct, id: e.target.value })}
+                                        className="w-full p-3 border rounded-xl"
+                                        placeholder="ex: kit-completo"
+                                        disabled={!!products.find(p => p.id === editingProduct?.id)}
+                                        required
+                                    />
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Local de Compra</label>
-                                    <select value={editingClient?.purchase_location || 'site_oficial'} onChange={e => setEditingClient({ ...editingClient, purchase_location: e.target.value })} className="w-full p-3 border rounded-xl">
-                                        <option value="site_oficial">Site Oficial</option>
-                                        <option value="farmacia">Farmácia</option>
-                                        <option value="clinica">Clínica</option>
-                                        <option value="revendedor">Revendedor</option>
-                                    </select>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Nome do Produto</label>
+                                    <input type="text" value={editingProduct?.name || ''} onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })} className="w-full p-3 border rounded-xl" required />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Preço de Custo (R$)</label>
+                                    <input type="number" step="0.01" value={editingProduct?.cost_price || 0} onChange={e => setEditingProduct({ ...editingProduct, cost_price: parseFloat(e.target.value) })} className="w-full p-3 border rounded-xl" required />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Preço de Venda (R$)</label>
+                                    <input type="number" step="0.01" value={editingProduct?.price || 0} onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })} className="w-full p-3 border rounded-xl" required />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1">Quantidade Inicial</label>
+                                    <input type="number" value={editingProduct?.stock_quantity || 0} onChange={e => setEditingProduct({ ...editingProduct, stock_quantity: parseInt(e.target.value) })} className="w-full p-3 border rounded-xl" required />
                                 </div>
                             </div>
 
                             <div className="flex space-x-4 mt-8">
-                                <button type="button" onClick={() => { setIsModalOpen(false); setEditingClient(null); }} className="flex-1 py-4 border rounded-xl font-bold text-gray-500">Cancelar</button>
-                                <button type="submit" className="flex-1 py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20">Salvar</button>
+                                <button type="button" onClick={() => { setIsProductModalOpen(false); setEditingProduct(null); }} className="flex-1 py-4 border rounded-xl font-bold text-gray-500">Cancelar</button>
+                                <button type="submit" className="flex-1 py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20">Salvar Produto</button>
                             </div>
                         </form>
                     </div>
