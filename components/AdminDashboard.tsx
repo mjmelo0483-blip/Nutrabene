@@ -172,6 +172,9 @@ const AdminDashboard: React.FC = () => {
     const [isResellerModalOpen, setIsResellerModalOpen] = useState(false);
     const [resellerForm, setResellerForm] = useState<Partial<Reseller>>({ commission_rate: 20 });
 
+    const [filterMonth, setFilterMonth] = useState<number>(new Date().getMonth());
+    const [filterYear, setFilterYear] = useState<number>(new Date().getFullYear());
+
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
 
     const askConfirmation = (title: string, message: string, onConfirm: () => void) => {
@@ -809,85 +812,180 @@ const AdminDashboard: React.FC = () => {
                         </h1>
                         <p className="text-gray-500 mt-1">Gestão inteligente Nutrabene.</p>
                     </div>
+
+                    {activeTab === 'dashboard' && (
+                        <div className="flex space-x-2">
+                            <select
+                                value={filterMonth}
+                                onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+                                className="bg-white border rounded-xl px-4 py-2 font-bold text-sm outline-none focus:ring-2 ring-primary/20"
+                            >
+                                {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => (
+                                    <option key={i} value={i}>{m}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={filterYear}
+                                onChange={(e) => setFilterYear(parseInt(e.target.value))}
+                                className="bg-white border rounded-xl px-4 py-2 font-bold text-sm outline-none focus:ring-2 ring-primary/20"
+                            >
+                                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </header>
 
                 {/* Dashboard Tab */}
-                {activeTab === 'dashboard' && (
-                    <div className="space-y-8 animate-in fade-in duration-500">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
-                                <div className="h-12 w-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
-                                    <span className="material-symbols-outlined">payments</span>
-                                </div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">Receita Total</p>
-                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">R$ {sales.reduce((acc, s) => acc + s.total_price, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            </div>
-                            <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
-                                <div className="h-12 w-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
-                                    <span className="material-symbols-outlined">trending_up</span>
-                                </div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">Vendas</p>
-                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">{sales.length}</p>
-                            </div>
-                            <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
-                                <div className="h-12 w-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
-                                    <span className="material-symbols-outlined">inventory_2</span>
-                                </div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">Abaixo do Estoque</p>
-                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">{products.filter(p => p.stock_quantity <= 5).length}</p>
-                            </div>
-                            <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
-                                <div className="h-12 w-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
-                                    <span className="material-symbols-outlined">group</span>
-                                </div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">Clientes</p>
-                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">{registrations.length}</p>
-                            </div>
-                        </div>
+                {activeTab === 'dashboard' && (() => {
+                    const filteredSales = sales.filter(s => {
+                        const d = new Date(s.sale_date);
+                        return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+                    });
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div className="bg-white p-8 rounded-3xl border shadow-sm">
-                                <h3 className="text-lg font-bold mb-6 flex items-center">
-                                    <span className="material-symbols-outlined mr-2 text-primary">account_balance</span>
-                                    Finanças Pendentes
-                                </h3>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center p-5 bg-green-50 rounded-2xl border border-green-100">
-                                        <div className="flex items-center text-green-800">
-                                            <span className="material-symbols-outlined mr-3">arrow_upward</span>
-                                            <span className="font-bold">Total a Receber</span>
-                                        </div>
-                                        <span className="font-black text-green-600 text-lg whitespace-nowrap">
-                                            R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </span>
+                    const totalRevenue = filteredSales.reduce((acc, s) => acc + s.total_price, 0);
+                    const totalDiscounts = filteredSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+                    const totalCommissions = filteredSales.reduce((acc, s) => {
+                        if (!s.reseller_id) return acc;
+                        const reseller = resellers.find(r => r.id === s.reseller_id);
+                        return acc + (s.net_amount * ((reseller?.commission_rate || 0) / 100));
+                    }, 0);
+                    const finalNet = filteredSales.reduce((acc, s) => acc + s.net_amount, 0) - totalCommissions;
+
+                    const productRanking = products.map(p => ({
+                        ...p,
+                        sold: filteredSales.filter(s => s.product_id === p.id).reduce((acc, s) => acc + s.quantity, 0),
+                        revenue: filteredSales.filter(s => s.product_id === p.id).reduce((acc, s) => acc + s.net_amount, 0)
+                    })).filter(p => p.sold > 0).sort((a, b) => b.sold - a.sold);
+
+                    return (
+                        <div className="space-y-8 animate-in fade-in duration-500">
+                            {/* KPI Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
+                                    <div className="h-12 w-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+                                        <span className="material-symbols-outlined">payments</span>
                                     </div>
-                                    <div className="flex justify-between items-center p-5 bg-red-50 rounded-2xl border border-red-100">
-                                        <div className="flex items-center text-red-800">
-                                            <span className="material-symbols-outlined mr-3">arrow_downward</span>
-                                            <span className="font-bold">Total a Pagar</span>
-                                        </div>
-                                        <span className="font-black text-red-600 text-lg whitespace-nowrap">
-                                            R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </span>
+                                    <p className="text-xs font-bold text-gray-400 uppercase">Faturamento Bruto</p>
+                                    <p className="text-xl font-black text-gray-800 whitespace-nowrap">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">No mês selecionado</p>
+                                </div>
+                                <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
+                                    <div className="h-12 w-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+                                        <span className="material-symbols-outlined">sell</span>
                                     </div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase">Total Descontos</p>
+                                    <p className="text-xl font-black text-red-600 whitespace-nowrap">R$ {totalDiscounts.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">Concedidos em vendas</p>
+                                </div>
+                                <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
+                                    <div className="h-12 w-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+                                        <span className="material-symbols-outlined">handshake</span>
+                                    </div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase">Comissões Devidas</p>
+                                    <p className="text-xl font-black text-amber-600 whitespace-nowrap">R$ {totalCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">Para revendedores</p>
+                                </div>
+                                <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
+                                    <div className="h-12 w-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+                                        <span className="material-symbols-outlined">account_balance_wallet</span>
+                                    </div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase">Faturamento Líquido</p>
+                                    <p className="text-xl font-black text-green-600 whitespace-nowrap">R$ {finalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">Após descontos e comissões</p>
                                 </div>
                             </div>
-                            <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10 flex flex-col justify-center items-center text-center">
-                                <p className="text-sm font-bold text-primary/60 uppercase tracking-widest mb-2">Disponível em Bancos</p>
-                                <p className="text-4xl font-black text-primary whitespace-nowrap">
-                                    R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                                <div className="mt-6 flex space-x-2">
-                                    {bankAccounts.map(b => (
-                                        <div key={b.id} className="bg-white px-3 py-1 rounded-full text-[10px] font-bold text-gray-500 border whitespace-nowrap">
-                                            {b.name}: R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <div className="lg:col-span-2 space-y-8">
+                                    <div className="bg-white p-8 rounded-3xl border shadow-sm">
+                                        <h3 className="text-lg font-bold mb-6 flex items-center justify-between">
+                                            <div className="flex items-center">
+                                                <span className="material-symbols-outlined mr-2 text-primary">analytics</span>
+                                                Ranking de Produtos Mais Vendidos
+                                            </div>
+                                            <span className="text-xs text-gray-400 font-medium">{filteredSales.length} vendas no período</span>
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {productRanking.length === 0 ? (
+                                                <div className="text-center py-10 text-gray-400 font-bold border-2 border-dashed rounded-3xl">
+                                                    Nenhuma venda registrada neste período.
+                                                </div>
+                                            ) : (
+                                                productRanking.map((p, idx) => (
+                                                    <div key={p.id} className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-2xl transition-colors group">
+                                                        <div className="flex items-center space-x-4">
+                                                            <div className={`h-8 w-8 rounded-full flex items-center justify-center font-black text-xs ${idx === 0 ? 'bg-amber-100 text-amber-600' : idx === 1 ? 'bg-gray-100 text-gray-600' : idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                                {idx + 1}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-gray-800">{p.name}</p>
+                                                                <p className="text-[10px] text-gray-400 uppercase font-black">{p.sold} unidades vendidas</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-sm font-black text-gray-800">R$ {p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                            <div className="w-32 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                                                                <div
+                                                                    className="h-full bg-primary"
+                                                                    style={{ width: `${(p.sold / productRanking[0].sold) * 100}%` }}
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
                                         </div>
-                                    ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8">
+                                    <div className="bg-white p-8 rounded-3xl border shadow-sm">
+                                        <h3 className="text-lg font-bold mb-6 flex items-center">
+                                            <span className="material-symbols-outlined mr-2 text-primary">account_balance</span>
+                                            Finanças Pendentes
+                                        </h3>
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center p-5 bg-green-50 rounded-2xl border border-green-100">
+                                                <div className="flex items-center text-green-800">
+                                                    <span className="material-symbols-outlined mr-3">arrow_upward</span>
+                                                    <span className="font-bold">Total a Receber</span>
+                                                </div>
+                                                <span className="font-black text-green-600 text-lg whitespace-nowrap">
+                                                    R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-5 bg-red-50 rounded-2xl border border-red-100">
+                                                <div className="flex items-center text-red-800">
+                                                    <span className="material-symbols-outlined mr-3">arrow_downward</span>
+                                                    <span className="font-bold">Total a Pagar</span>
+                                                </div>
+                                                <span className="font-black text-red-600 text-lg whitespace-nowrap">
+                                                    R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10 flex flex-col justify-center items-center text-center">
+                                        <p className="text-sm font-bold text-primary/60 uppercase tracking-widest mb-2">Disponível em Bancos</p>
+                                        <p className="text-4xl font-black text-primary whitespace-nowrap">
+                                            R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                        <div className="mt-6 flex flex-wrap justify-center gap-2">
+                                            {bankAccounts.map(b => (
+                                                <div key={b.id} className="bg-white px-3 py-1 rounded-full text-[10px] font-bold text-gray-500 border whitespace-nowrap">
+                                                    {b.name}: R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* Clients Tab */}
                 {activeTab === 'clients' && (
