@@ -1502,14 +1502,28 @@ const AdminDashboard: React.FC = () => {
                                     </select>
                                 </div>
                             )}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Categoria</label>
-                                <select value={(financialForm as any).category_id || ''} onChange={e => setFinancialForm({ ...financialForm, category_id: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
-                                    <option value="">Selecione a Categoria</option>
-                                    {categories
-                                        .filter(c => (financialForm.type === 'receivable' ? c.type === 'income' : c.type === 'expense'))
-                                        .map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                                </select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Status do Lançamento</label>
+                                    <select
+                                        value={financialForm.status || 'pending'}
+                                        onChange={e => setFinancialForm({ ...financialForm, status: e.target.value as any })}
+                                        className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer font-bold"
+                                    >
+                                        <option value="pending">⏳ Aguardando</option>
+                                        <option value="paid">✅ Pago / Liquidado</option>
+                                        <option value="overdue">⚠️ Atrasado</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Categoria</label>
+                                    <select value={(financialForm as any).category_id || ''} onChange={e => setFinancialForm({ ...financialForm, category_id: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
+                                        <option value="">Selecione a Categoria</option>
+                                        {categories
+                                            .filter(c => (financialForm.type === 'receivable' ? c.type === 'income' : c.type === 'expense'))
+                                            .map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                                    </select>
+                                </div>
                             </div>
                             <div className="flex space-x-6 pt-6">
                                 <button type="button" onClick={() => setIsFinancialModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400">Descartar</button>
