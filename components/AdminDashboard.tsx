@@ -56,6 +56,10 @@ interface FinancialEntry {
     sale_id?: string;
     created_at?: string;
     entry_date?: string;
+    payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash' | 'other';
+    credit_card_id?: string;
+    installments_total?: number;
+    installment_number?: number;
 }
 
 interface Sale {
@@ -135,7 +139,9 @@ const AdminDashboard: React.FC = () => {
         type: 'payable',
         due_date: new Date().toISOString().split('T')[0],
         entry_date: new Date().toISOString().split('T')[0],
-        status: 'pending'
+        status: 'pending',
+        payment_method: 'cash',
+        installments_total: 1
     });
 
     const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
@@ -492,25 +498,60 @@ const AdminDashboard: React.FC = () => {
             return;
         }
 
-        // Get category name from ID if possible
         const category = categories.find(c => c.id === financialForm.category_id)?.name || financialForm.category || 'Geral';
         const entryData = { ...financialForm, category };
 
-        let error;
-        if (financialForm.id) {
-            const { id, ...updateData } = entryData;
-            const { error: updError } = await supabase.from('financial_entries').update(updateData).eq('id', id);
-            error = updError;
-        } else {
-            const { error: insError } = await supabase.from('financial_entries').insert([entryData]);
-            error = insError;
-        }
+        try {
+            if (entryData.id) {
+                // Update existing
+                const { id, ...updateData } = entryData;
+                const { error } = await supabase.from('financial_entries').update(updateData).eq('id', id);
+                if (error) throw error;
+            } else {
+                // Create New (handle installments if credit card)
+                const installments = entryData.payment_method === 'credit_card' ? (entryData.installments_total || 1) : 1;
+                const baseAmount = entryData.amount;
+                const installmentAmount = parseFloat((baseAmount / installments).toFixed(2));
+                const entriesToInsert = [];
 
-        if (error) showNotification(`Erro ao salvar lançamento: ${error.message}`, 'error');
-        else {
-            showNotification('Lançamento financeiro gravado!');
+                for (let i = 1; i <= installments; i++) {
+                    const entryDate = new Date(entryData.entry_date || new Date());
+                    const dueDate = new Date(entryData.due_date || new Date());
+
+                    // Add months for installments
+                    if (i > 1) {
+                        dueDate.setMonth(dueDate.getMonth() + (i - 1));
+                    }
+
+                    entriesToInsert.push({
+                        ...entryData,
+                        amount: i === installments ? parseFloat((baseAmount - (installmentAmount * (installments - 1))).toFixed(2)) : installmentAmount,
+                        due_date: dueDate.toISOString().split('T')[0],
+                        installment_number: i,
+                        installments_total: installments,
+                        description: installments > 1 ? `${entryData.description} (${i}/${installments})` : entryData.description
+                    });
+                }
+
+                const { error } = await supabase.from('financial_entries').insert(entriesToInsert);
+                if (error) throw error;
+
+                // Impact Credit Card Balance if it's a credit card expense
+                if (entryData.payment_method === 'credit_card' && entryData.credit_card_id && entryData.type === 'payable') {
+                    const card = creditCards.find(c => c.id === entryData.credit_card_id);
+                    if (card) {
+                        await supabase.from('credit_cards')
+                            .update({ current_balance: card.current_balance + baseAmount })
+                            .eq('id', card.id);
+                    }
+                }
+            }
+
+            showNotification(entryData.id ? 'Lançamento atualizado!' : 'Lançamento(s) gravado(s) com sucesso!');
             setIsFinancialModalOpen(false);
             fetchData();
+        } catch (error: any) {
+            showNotification(`Erro: ${error.message}`, 'error');
         }
     }
 
@@ -1411,10 +1452,55 @@ const AdminDashboard: React.FC = () => {
                                     <input type="date" value={financialForm.entry_date || ''} onChange={e => setFinancialForm({ ...financialForm, entry_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                 </label>
                                 <label className="block">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vencimento</span>
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vencimento / 1ª Parcela</span>
                                     <input type="date" value={financialForm.due_date || ''} onChange={e => setFinancialForm({ ...financialForm, due_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                 </label>
                             </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Meio de Pagamento</label>
+                                    <select
+                                        value={financialForm.payment_method || 'cash'}
+                                        onChange={e => setFinancialForm({ ...financialForm, payment_method: e.target.value as any })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="cash">💵 Dinheiro</option>
+                                        <option value="pix">📱 Pix</option>
+                                        <option value="debit_card">💳 Cartão de Débito</option>
+                                        <option value="credit_card">💳 Cartão de Crédito</option>
+                                        <option value="other"> outros</option>
+                                    </select>
+                                </div>
+                                {financialForm.payment_method === 'credit_card' && (
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Parcelas</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="48"
+                                            value={financialForm.installments_total || 1}
+                                            onChange={e => setFinancialForm({ ...financialForm, installments_total: parseInt(e.target.value) })}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {financialForm.payment_method === 'credit_card' && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Selecionar Cartão</label>
+                                    <select
+                                        value={financialForm.credit_card_id || ''}
+                                        onChange={e => setFinancialForm({ ...financialForm, credit_card_id: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                        required={financialForm.payment_method === 'credit_card'}
+                                    >
+                                        <option value="">Selecione o Cartão</option>
+                                        {creditCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                                    </select>
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Categoria</label>
                                 <select value={(financialForm as any).category_id || ''} onChange={e => setFinancialForm({ ...financialForm, category_id: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
