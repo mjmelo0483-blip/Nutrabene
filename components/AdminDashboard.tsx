@@ -796,8 +796,8 @@ const AdminDashboard: React.FC = () => {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 ml-72 p-12 pb-32">
-                <header className="flex justify-between items-start mb-12">
+            <main className="flex-1 ml-72 p-6 pb-24">
+                <header className="flex justify-between items-start mb-8">
                     <div>
                         <h1 className="text-3xl font-black text-gray-800 capitalize">
                             {activeTab === 'dashboard' ? 'Visão Geral' :
@@ -827,21 +827,21 @@ const AdminDashboard: React.FC = () => {
                                     <span className="material-symbols-outlined">trending_up</span>
                                 </div>
                                 <p className="text-xs font-bold text-gray-400 uppercase">Vendas</p>
-                                <p className="text-2xl font-black text-gray-800">{sales.length}</p>
+                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">{sales.length}</p>
                             </div>
                             <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
                                 <div className="h-12 w-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
                                     <span className="material-symbols-outlined">inventory_2</span>
                                 </div>
                                 <p className="text-xs font-bold text-gray-400 uppercase">Abaixo do Estoque</p>
-                                <p className="text-2xl font-black text-gray-800">{products.filter(p => p.stock_quantity <= 5).length}</p>
+                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">{products.filter(p => p.stock_quantity <= 5).length}</p>
                             </div>
                             <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
                                 <div className="h-12 w-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
                                     <span className="material-symbols-outlined">group</span>
                                 </div>
                                 <p className="text-xs font-bold text-gray-400 uppercase">Clientes</p>
-                                <p className="text-2xl font-black text-gray-800">{registrations.length}</p>
+                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">{registrations.length}</p>
                             </div>
                         </div>
 
@@ -905,23 +905,23 @@ const AdminDashboard: React.FC = () => {
                             <table className="w-full">
                                 <thead className="bg-gray-50 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">
                                     <tr>
-                                        <th className="px-8 py-5 text-center w-20">#</th>
-                                        <th className="px-8 py-5">Cliente</th>
-                                        <th className="px-8 py-5">Contato</th>
-                                        <th className="px-8 py-5">Status VIP</th>
-                                        <th className="px-8 py-5 text-center">Ações</th>
+                                        <th className="px-4 py-5 text-center w-20">#</th>
+                                        <th className="px-4 py-5">Cliente</th>
+                                        <th className="px-4 py-5">Contato</th>
+                                        <th className="px-4 py-5">Status VIP</th>
+                                        <th className="px-4 py-5 text-center">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y text-sm">
                                     {registrations.map((reg, idx) => (
                                         <tr key={reg.id} className="hover:bg-gray-50/50 transition-colors">
-                                            <td className="px-8 py-5 text-center text-gray-300 font-bold">{idx + 1}</td>
-                                            <td className="px-8 py-5">
+                                            <td className="px-4 py-5 text-center text-gray-300 font-bold">{idx + 1}</td>
+                                            <td className="px-4 py-5">
                                                 <div className="font-bold text-gray-800">{reg.name}</div>
                                                 <div className="text-gray-400 text-xs">{reg.email}</div>
                                             </td>
-                                            <td className="px-8 py-5 font-medium text-gray-600">{reg.whatsapp}</td>
-                                            <td className="px-8 py-5">
+                                            <td className="px-4 py-5 font-medium text-gray-600">{reg.whatsapp}</td>
+                                            <td className="px-4 py-5">
                                                 <div className="flex flex-col">
                                                     <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase w-fit mb-1">
                                                         {reg.purchase_location?.replace('_', ' ') || 'Site Oficial'}
@@ -934,13 +934,13 @@ const AdminDashboard: React.FC = () => {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-8 py-5">
+                                            <td className="px-4 py-5">
                                                 <div className="flex justify-center space-x-2">
-                                                    <button onClick={() => { setEditingClient(reg); setIsModalOpen(true); }} className="h-10 w-10 text-blue-600 hover:bg-blue-50 rounded-xl flex items-center justify-center transition-colors">
-                                                        <span className="material-symbols-outlined text-xl">edit</span>
+                                                    <button onClick={() => { setEditingClient(reg); setIsModalOpen(true); }} className="h-8 w-8 text-blue-600 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                        <span className="material-symbols-outlined text-lg">edit</span>
                                                     </button>
-                                                    <button onClick={() => handleDeleteClient(reg.id)} className="h-10 w-10 text-red-600 hover:bg-red-50 rounded-xl flex items-center justify-center transition-colors">
-                                                        <span className="material-symbols-outlined text-xl">delete</span>
+                                                    <button onClick={() => handleDeleteClient(reg.id)} className="h-8 w-8 text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                        <span className="material-symbols-outlined text-lg">delete</span>
                                                     </button>
                                                 </div>
                                             </td>
@@ -983,55 +983,55 @@ const AdminDashboard: React.FC = () => {
                                 <table className="w-full">
                                     <thead className="bg-gray-50 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">
                                         <tr>
-                                            <th className="px-8 py-5">Produto</th>
-                                            <th className="px-8 py-5">Valores</th>
-                                            <th className="px-8 py-5 text-center">Estoque</th>
-                                            <th className="px-8 py-5 text-center">Status</th>
-                                            <th className="px-8 py-5 text-center">Ações</th>
+                                            <th className="px-4 py-5">Produto</th>
+                                            <th className="px-4 py-5">Valores</th>
+                                            <th className="px-4 py-5 text-center">Estoque</th>
+                                            <th className="px-4 py-5 text-center">Status</th>
+                                            <th className="px-4 py-5 text-center">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y text-sm text-gray-600">
                                         {products.map(p => (
                                             <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-8 py-5">
-                                                    <div className="font-bold text-gray-800">{p.name}</div>
-                                                    <div className="text-[10px] text-gray-300 font-mono">{p.id}</div>
+                                                <td className="px-4 py-5">
+                                                    <div className="font-bold text-gray-800 text-xs">{p.name}</div>
+                                                    <div className="text-[9px] text-gray-300 font-mono">{p.id}</div>
                                                 </td>
-                                                <td className="px-8 py-5">
-                                                    <div className="flex space-x-6">
+                                                <td className="px-4 py-5">
+                                                    <div className="flex space-x-4">
                                                         <div>
-                                                            <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Custo</span>
-                                                            <span className="font-medium text-gray-500">R$ {p.cost_price.toLocaleString('pt-BR')}</span>
+                                                            <span className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Custo</span>
+                                                            <span className="font-medium text-gray-500 text-xs">R$ {p.cost_price.toLocaleString('pt-BR')}</span>
                                                         </div>
                                                         <div>
-                                                            <span className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Venda</span>
-                                                            <span className="font-black text-green-600">R$ {p.price.toLocaleString('pt-BR')}</span>
+                                                            <span className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Venda</span>
+                                                            <span className="font-black text-green-600 text-xs">R$ {p.price.toLocaleString('pt-BR')}</span>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-5">
-                                                    <div className="flex items-center justify-center space-x-4">
-                                                        <button onClick={() => handleUpdateStock(p.id, p.stock_quantity - 1)} disabled={updatingStock === p.id} className="h-8 w-8 rounded-lg border flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all shadow-sm">
-                                                            <span className="material-symbols-outlined text-sm font-bold">remove</span>
+                                                <td className="px-4 py-5">
+                                                    <div className="flex items-center justify-center space-x-2">
+                                                        <button onClick={() => handleUpdateStock(p.id, p.stock_quantity - 1)} disabled={updatingStock === p.id} className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all shadow-sm">
+                                                            <span className="material-symbols-outlined text-[10px] font-bold">remove</span>
                                                         </button>
-                                                        <span className={`text-lg font-black w-8 text-center ${p.stock_quantity <= 5 ? 'text-red-500' : 'text-gray-800'}`}>{p.stock_quantity}</span>
-                                                        <button onClick={() => handleUpdateStock(p.id, p.stock_quantity + 1)} disabled={updatingStock === p.id} className="h-8 w-8 rounded-lg border flex items-center justify-center hover:bg-green-50 hover:text-green-500 transition-all shadow-sm">
-                                                            <span className="material-symbols-outlined text-sm font-bold">add</span>
+                                                        <span className={`text-xs font-black w-6 text-center ${p.stock_quantity <= 5 ? 'text-red-500' : 'text-gray-800'}`}>{p.stock_quantity}</span>
+                                                        <button onClick={() => handleUpdateStock(p.id, p.stock_quantity + 1)} disabled={updatingStock === p.id} className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-green-50 hover:text-green-500 transition-all shadow-sm">
+                                                            <span className="material-symbols-outlined text-[10px] font-bold">add</span>
                                                         </button>
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-5 text-center">
-                                                    {p.stock_quantity === 0 ? <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black">OUT OF STOCK</span> :
-                                                        p.stock_quantity <= 5 ? <span className="bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black">LOW STOCK</span> :
-                                                            <span className="bg-green-100 text-green-600 px-3 py-1 rounded-full text-[10px] font-black">VERIFIED</span>}
+                                                <td className="px-4 py-5 text-center">
+                                                    {p.stock_quantity === 0 ? <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">Sem Estoque</span> :
+                                                        p.stock_quantity <= 5 ? <span className="bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">Baixo Estoque</span> :
+                                                            <span className="bg-green-100 text-green-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">OK</span>}
                                                 </td>
-                                                <td className="px-8 py-5">
-                                                    <div className="flex justify-center space-x-2">
-                                                        <button onClick={() => { setEditingProduct(p); setIsProductModalOpen(true); }} className="h-10 w-10 text-blue-600 hover:bg-blue-50 rounded-xl flex items-center justify-center transition-colors">
-                                                            <span className="material-symbols-outlined">edit</span>
+                                                <td className="px-4 py-5">
+                                                    <div className="flex justify-center space-x-1">
+                                                        <button onClick={() => { setEditingProduct(p); setIsProductModalOpen(true); }} className="h-7 w-7 text-blue-600 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                            <span className="material-symbols-outlined text-xs">edit</span>
                                                         </button>
-                                                        <button onClick={() => handleDeleteProduct(p.id)} className="h-10 w-10 text-red-600 hover:bg-red-50 rounded-xl flex items-center justify-center transition-colors">
-                                                            <span className="material-symbols-outlined">delete</span>
+                                                        <button onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                            <span className="material-symbols-outlined text-xs">delete</span>
                                                         </button>
                                                     </div>
                                                 </td>
@@ -1084,50 +1084,50 @@ const AdminDashboard: React.FC = () => {
                                     <table className="w-full">
                                         <thead className="bg-gray-50 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                             <tr>
-                                                <th className="px-8 py-5">Venda / Venc.</th>
-                                                <th className="px-8 py-5">Produto / Cliente</th>
-                                                <th className="px-8 py-5">Vendedor</th>
-                                                <th className="px-8 py-5 text-center">Quant.</th>
-                                                <th className="px-8 py-5 text-right">Total (Bruto)</th>
-                                                <th className="px-8 py-5 text-right">Desconto (%)</th>
-                                                <th className="px-8 py-5 text-right">Líquido</th>
-                                                <th className="px-8 py-5 text-center">Status</th>
-                                                <th className="px-8 py-5 text-center">Ações</th>
+                                                <th className="px-4 py-5">Venda / Venc.</th>
+                                                <th className="px-4 py-5">Produto / Cliente</th>
+                                                <th className="px-4 py-5">Vendedor</th>
+                                                <th className="px-4 py-5 text-center">Quant.</th>
+                                                <th className="px-4 py-5 text-right">Total (Bruto)</th>
+                                                <th className="px-4 py-5 text-right">Desconto (%)</th>
+                                                <th className="px-4 py-5 text-right">Líquido</th>
+                                                <th className="px-4 py-5 text-center">Status</th>
+                                                <th className="px-4 py-5 text-center">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y text-sm">
                                             {sales.map(s => (
                                                 <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                                                    <td className="px-8 py-5">
+                                                    <td className="px-4 py-5">
                                                         <div className="text-gray-500 font-medium whitespace-nowrap">{formatDate(s.sale_date)}</div>
                                                         <div className="text-[10px] text-amber-500 font-black uppercase whitespace-nowrap">Venc: {formatDate(s.due_date)}</div>
                                                     </td>
-                                                    <td className="px-8 py-5">
+                                                    <td className="px-4 py-5">
                                                         <div className="font-bold text-gray-800">{products.find(p => p.id === s.product_id)?.name || 'Produto Excluído'}</div>
                                                         <div className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">{registrations.find(c => c.id === s.client_id)?.name || 'Venda Avulsa'}</div>
                                                     </td>
-                                                    <td className="px-8 py-5">
+                                                    <td className="px-4 py-5">
                                                         <div className="text-sm text-gray-600 font-bold">{resellers.find(r => r.id === s.reseller_id)?.name || 'Direta'}</div>
                                                     </td>
-                                                    <td className="px-8 py-5 text-center font-bold">{s.quantity}</td>
-                                                    <td className="px-8 py-5 text-right font-medium text-gray-500 text-xs whitespace-nowrap">R$ {s.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="px-8 py-5 text-right font-bold text-red-400 text-xs whitespace-nowrap">
+                                                    <td className="px-4 py-5 text-center font-bold">{s.quantity}</td>
+                                                    <td className="px-4 py-5 text-right font-medium text-gray-500 text-[10px] whitespace-nowrap">R$ {s.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-5 text-right font-bold text-red-400 text-[10px] whitespace-nowrap">
                                                         - R$ {(s.discount_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         <span className="block text-[8px] opacity-50">({s.discount_percentage || 0}%)</span>
                                                     </td>
-                                                    <td className="px-8 py-5 text-right font-black text-primary text-base whitespace-nowrap">R$ {(s.net_amount || s.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="px-8 py-5 text-center">
-                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${s.payment_status === 'paid' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                    <td className="px-4 py-5 text-right font-black text-primary text-sm whitespace-nowrap">R$ {(s.net_amount || s.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-5 text-center text-xs">
+                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${s.payment_status === 'paid' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
                                                             {s.payment_status === 'paid' ? 'Pago' : 'Pendente'}
                                                         </span>
                                                     </td>
-                                                    <td className="px-8 py-5">
-                                                        <div className="flex justify-center space-x-2">
-                                                            <button onClick={() => { setSaleForm(s); setIsSaleModalOpen(true); }} className="h-8 w-8 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
-                                                                <span className="material-symbols-outlined text-sm">edit</span>
+                                                    <td className="px-4 py-5">
+                                                        <div className="flex justify-center space-x-1">
+                                                            <button onClick={() => { setSaleForm(s); setIsSaleModalOpen(true); }} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                <span className="material-symbols-outlined text-xs">edit</span>
                                                             </button>
-                                                            <button onClick={() => handleDeleteSale(s.id)} className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
-                                                                <span className="material-symbols-outlined text-sm">delete</span>
+                                                            <button onClick={() => handleDeleteSale(s.id)} className="h-7 w-7 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                <span className="material-symbols-outlined text-xs">delete</span>
                                                             </button>
                                                         </div>
                                                     </td>
@@ -1187,17 +1187,17 @@ const AdminDashboard: React.FC = () => {
                 {activeTab === 'finances' && (
                     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
+                            <div className="bg-white px-4 py-6 rounded-3xl border shadow-sm flex flex-col justify-center">
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saldo Total Bancos</p>
-                                <p className="text-2xl font-black text-indigo-600 whitespace-nowrap">R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-xl font-black text-indigo-600 whitespace-nowrap">R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
-                            <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
+                            <div className="bg-white px-4 py-6 rounded-3xl border shadow-sm flex flex-col justify-center">
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contas a Receber</p>
-                                <p className="text-2xl font-black text-green-600 whitespace-nowrap">R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-xl font-black text-green-600 whitespace-nowrap">R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
-                            <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
+                            <div className="bg-white px-4 py-6 rounded-3xl border shadow-sm flex flex-col justify-center">
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contas a Pagar</p>
-                                <p className="text-2xl font-black text-red-500 whitespace-nowrap">R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-xl font-black text-red-500 whitespace-nowrap">R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                             <button
                                 onClick={() => {
@@ -1209,7 +1209,7 @@ const AdminDashboard: React.FC = () => {
                                     });
                                     setIsFinancialModalOpen(true);
                                 }}
-                                className="bg-primary text-white p-8 rounded-3xl shadow-xl shadow-primary/20 font-black flex items-center justify-center hover:scale-105 transition-all"
+                                className="bg-primary text-white px-4 py-6 rounded-3xl shadow-xl shadow-primary/20 font-black flex items-center justify-center hover:scale-105 transition-all"
                             >
                                 <span className="material-symbols-outlined mr-2">add_circle</span> Novo Lançamento
                             </button>
@@ -1223,43 +1223,43 @@ const AdminDashboard: React.FC = () => {
                                 <table className="w-full">
                                     <thead className="bg-gray-50 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                         <tr>
-                                            <th className="px-8 py-5">Vencimento</th>
-                                            <th className="px-8 py-5">Descrição / Categoria</th>
-                                            <th className="px-8 py-5 text-right">Valor</th>
-                                            <th className="px-8 py-5 text-center">Status</th>
-                                            <th className="px-8 py-5 text-center">Ações</th>
+                                            <th className="px-4 py-5">Vencimento</th>
+                                            <th className="px-4 py-5">Descrição / Categoria</th>
+                                            <th className="px-4 py-5 text-right">Valor</th>
+                                            <th className="px-4 py-5 text-center">Status</th>
+                                            <th className="px-4 py-5 text-center">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y text-sm">
                                         {financialEntries.map(entry => (
                                             <tr key={entry.id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-8 py-5 font-bold text-gray-400 whitespace-nowrap">{formatDate(entry.due_date)}</td>
-                                                <td className="px-8 py-5">
-                                                    <div className="font-black text-gray-800">{entry.description}</div>
-                                                    <div className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">
+                                                <td className="px-4 py-5 font-bold text-gray-400 whitespace-nowrap text-xs">{formatDate(entry.due_date)}</td>
+                                                <td className="px-4 py-5">
+                                                    <div className="font-black text-gray-800 text-xs">{entry.description}</div>
+                                                    <div className="text-[9px] text-gray-400 uppercase font-bold tracking-tighter">
                                                         {categories.find(c => c.id === (entry as any).category_id)?.name || entry.category}
                                                     </div>
                                                 </td>
-                                                <td className={`px-8 py-5 text-right font-black text-base whitespace-nowrap ${entry.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
+                                                <td className={`px-4 py-5 text-right font-black text-xs whitespace-nowrap ${entry.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
                                                     {entry.type === 'receivable' ? '+' : '-'} R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
-                                                <td className="px-8 py-5 text-center">
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${entry.status === 'paid' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                <td className="px-4 py-5 text-center">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${entry.status === 'paid' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
                                                         {entry.status === 'paid' ? 'Liquidado' : 'Aguardando'}
                                                     </span>
                                                 </td>
-                                                <td className="px-8 py-5">
-                                                    <div className="flex justify-center space-x-2">
+                                                <td className="px-4 py-5">
+                                                    <div className="flex justify-center space-x-1">
                                                         {entry.status !== 'paid' && (
-                                                            <button onClick={() => handleMarkAsPaid(entry)} title="Liquidar" className="h-8 w-8 text-green-500 hover:bg-green-50 rounded-lg flex items-center justify-center transition-colors">
-                                                                <span className="material-symbols-outlined text-sm">check_circle</span>
+                                                            <button onClick={() => handleMarkAsPaid(entry)} title="Liquidar" className="h-7 w-7 text-green-500 hover:bg-green-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                <span className="material-symbols-outlined text-xs">check_circle</span>
                                                             </button>
                                                         )}
-                                                        <button onClick={() => { setFinancialForm(entry); setIsFinancialModalOpen(true); }} className="h-8 w-8 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
-                                                            <span className="material-symbols-outlined text-sm">edit</span>
+                                                        <button onClick={() => { setFinancialForm(entry); setIsFinancialModalOpen(true); }} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                            <span className="material-symbols-outlined text-xs">edit</span>
                                                         </button>
-                                                        <button onClick={() => handleDeleteFinancial(entry.id)} className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
-                                                            <span className="material-symbols-outlined text-sm">delete</span>
+                                                        <button onClick={() => handleDeleteFinancial(entry.id)} className="h-7 w-7 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                            <span className="material-symbols-outlined text-xs">delete</span>
                                                         </button>
                                                     </div>
                                                 </td>
@@ -1286,7 +1286,7 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                                 <div className="grid grid-cols-1 gap-4">
                                     {bankAccounts.map(bank => (
-                                        <div key={bank.id} className="bg-white p-6 rounded-3xl border shadow-sm flex justify-between items-center group">
+                                        <div key={bank.id} className="bg-white px-4 py-5 rounded-3xl border shadow-sm flex justify-between items-center group">
                                             <div>
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{bank.name}</p>
                                                 <p className="text-xl font-black text-gray-800 whitespace-nowrap">R$ {bank.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -1311,7 +1311,7 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                                 <div className="grid grid-cols-1 gap-4">
                                     {creditCards.map(card => (
-                                        <div key={card.id} className="bg-white p-6 rounded-3xl border shadow-sm relative overflow-hidden group">
+                                        <div key={card.id} className="bg-white px-4 py-5 rounded-3xl border shadow-sm relative overflow-hidden group">
                                             <div className="absolute top-0 right-0 p-4">
                                                 <button onClick={() => { setCardForm(card); setIsCardModalOpen(true); }} className="text-gray-300 hover:text-blue-500 p-2 opacity-0 group-hover:opacity-100 transition-all">
                                                     <span className="material-symbols-outlined text-sm">edit</span>
@@ -1797,7 +1797,7 @@ const AdminDashboard: React.FC = () => {
             {
                 isSaleModalOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-                        <div className="bg-white w-full max-w-2xl rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white w-full max-w-2xl rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300 max-h-[95vh] overflow-y-auto">
                             <div className="flex justify-between items-center mb-10">
                                 <h2 className="text-3xl font-black text-gray-800">Lançar Nova Venda</h2>
                                 <button onClick={() => setIsSaleModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
