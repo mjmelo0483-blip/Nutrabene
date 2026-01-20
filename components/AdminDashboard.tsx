@@ -765,7 +765,7 @@ const AdminDashboard: React.FC = () => {
         } finally { setUploading(false); }
     }
 
-    const handleExportPDF = (reseller: Reseller, pendingSales: Sale[], totalCommission: number, totalNet: number) => {
+    const handleExportPDF = (reseller: Reseller, pendingSales: Sale[], totalGross: number, totalCommission: number, totalNet: number) => {
         const doc = new jsPDF();
         const date = new Date().toLocaleDateString('pt-BR');
 
@@ -792,20 +792,25 @@ const AdminDashboard: React.FC = () => {
 
         // Summary Cards
         doc.setDrawColor(229, 231, 235);
-        doc.roundedRect(14, 45, 85, 25, 3, 3);
-        doc.roundedRect(110, 45, 85, 25, 3, 3);
+        doc.roundedRect(14, 45, 58, 25, 3, 3);
+        doc.roundedRect(76, 45, 58, 25, 3, 3);
+        doc.roundedRect(138, 45, 58, 25, 3, 3);
 
-        doc.setFontSize(10);
+        doc.setFontSize(9);
         doc.setTextColor(107, 114, 128);
-        doc.text('TOTAL COMISSÕES', 20, 52);
-        doc.text('TOTAL LÍQUIDO', 116, 52);
+        doc.text('TOTAL VENDIDO', 20, 52);
+        doc.text('TOTAL COMISSÕES', 82, 52);
+        doc.text('TOTAL LÍQUIDO', 144, 52);
 
-        doc.setFontSize(16);
+        doc.setFontSize(14);
+        doc.setTextColor(30, 64, 175); // Blue for gross
+        doc.text(`R$ ${totalGross.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 20, 62);
+
         doc.setTextColor(217, 119, 6); // Amber for commissions
-        doc.text(`R$ ${totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 20, 62);
+        doc.text(`R$ ${totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 82, 62);
 
         doc.setTextColor(5, 150, 105); // Green for net
-        doc.text(`R$ ${totalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 116, 62);
+        doc.text(`R$ ${totalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 144, 62);
 
         // Table
         const tableData = pendingSales.map(s => [
@@ -813,29 +818,31 @@ const AdminDashboard: React.FC = () => {
             formatDate(s.due_date),
             products.find(p => p.id === s.product_id)?.name || 'Produto Excluído',
             s.quantity,
+            `R$ ${s.total_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             `R$ ${s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             `R$ ${s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         ]);
 
         autoTable(doc, {
             startY: 80,
-            head: [['Venda', 'Vencimento', 'Produto', 'Qtd', 'Comissão', 'Líquido']],
+            head: [['Venda', 'Vencimento', 'Produto', 'Qtd', 'Total', 'Comissão', 'Líquido']],
             body: tableData,
             theme: 'striped',
             headStyles: {
                 fillColor: [30, 64, 175], // Indigo/Blue
                 textColor: [255, 255, 255],
-                fontSize: 10,
+                fontSize: 9,
                 fontStyle: 'bold',
                 halign: 'center'
             },
             columnStyles: {
                 3: { halign: 'center' },
                 4: { halign: 'right' },
-                5: { halign: 'right' }
+                5: { halign: 'right' },
+                6: { halign: 'right' }
             },
             bodyStyles: {
-                fontSize: 9
+                fontSize: 8
             }
         });
 
@@ -1951,6 +1958,7 @@ const AdminDashboard: React.FC = () => {
             {/* Closing Commissions Modal */}
             {isClosingModalOpen && selectedResellerForClosing && (() => {
                 const pendingSales = sales.filter(s => s.reseller_id === selectedResellerForClosing.id && s.payment_status !== 'paid');
+                const totalPendingGross = pendingSales.reduce((acc, s) => acc + (s.total_price || 0), 0);
                 const totalPendingCommission = pendingSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
                 const totalPendingNet = pendingSales.reduce((acc, s) => acc + s.net_amount, 0);
 
@@ -1967,14 +1975,18 @@ const AdminDashboard: React.FC = () => {
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="grid grid-cols-3 gap-4 mb-6">
+                                <div className="bg-blue-50 p-5 rounded-3xl border border-blue-100">
+                                    <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Total Vendido</p>
+                                    <p className="text-xl font-black text-blue-700">R$ {totalPendingGross.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
                                 <div className="bg-amber-50 p-5 rounded-3xl border border-amber-100">
                                     <p className="text-[10px] font-black text-amber-600 uppercase mb-1">Total Comissões</p>
-                                    <p className="text-2xl font-black text-amber-700">R$ {totalPendingCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-xl font-black text-amber-700">R$ {totalPendingCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                                 <div className="bg-primary/5 p-5 rounded-3xl border border-primary/10">
                                     <p className="text-[10px] font-black text-primary uppercase mb-1">Total Líquido</p>
-                                    <p className="text-2xl font-black text-primary">R$ {totalPendingNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-xl font-black text-primary">R$ {totalPendingNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                             </div>
 
@@ -1986,6 +1998,7 @@ const AdminDashboard: React.FC = () => {
                                             <th className="px-3 py-3">Vencimento</th>
                                             <th className="px-3 py-3">Produto</th>
                                             <th className="px-3 py-3 text-right">Qtd</th>
+                                            <th className="px-3 py-3 text-right">Bruto</th>
                                             <th className="px-3 py-3 text-right">Comissão</th>
                                             <th className="px-3 py-3 text-right rounded-r-xl">Líquido</th>
                                         </tr>
@@ -2002,6 +2015,7 @@ const AdminDashboard: React.FC = () => {
                                                     <td className="px-3 py-4 font-bold text-amber-500">{formatDate(s.due_date)}</td>
                                                     <td className="px-3 py-4 font-bold text-gray-700">{products.find(p => p.id === s.product_id)?.name}</td>
                                                     <td className="px-3 py-4 text-right font-bold">{s.quantity}</td>
+                                                    <td className="px-3 py-4 text-right font-bold text-gray-700">R$ {s.total_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-3 py-4 text-right font-black text-amber-600">R$ {s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-3 py-4 text-right font-black text-primary">R$ {s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                 </tr>
@@ -2019,7 +2033,7 @@ const AdminDashboard: React.FC = () => {
                                     Voltar
                                 </button>
                                 <button
-                                    onClick={() => handleExportPDF(selectedResellerForClosing, pendingSales, totalPendingCommission, totalPendingNet)}
+                                    onClick={() => handleExportPDF(selectedResellerForClosing, pendingSales, totalPendingGross, totalPendingCommission, totalPendingNet)}
                                     className="flex-1 bg-gray-100 text-gray-700 py-4 rounded-2xl font-black shadow-sm flex items-center justify-center hover:bg-gray-200 transition-all"
                                 >
                                     <span className="material-symbols-outlined mr-2">picture_as_pdf</span> PDF
