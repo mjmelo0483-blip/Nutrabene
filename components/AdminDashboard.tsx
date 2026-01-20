@@ -10,6 +10,7 @@ interface Registration {
     sleep_schedule: string;
     purchase_location: string;
     establishment_name?: string;
+    reseller_id?: string;
     created_at: string;
 }
 
@@ -906,7 +907,17 @@ const AdminDashboard: React.FC = () => {
                                             </td>
                                             <td className="px-8 py-5 font-medium text-gray-600">{reg.whatsapp}</td>
                                             <td className="px-8 py-5">
-                                                <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase">{reg.purchase_location}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase w-fit mb-1">
+                                                        {reg.purchase_location?.replace('_', ' ') || 'Site Oficial'}
+                                                    </span>
+                                                    {reg.purchase_location === 'revendedor' && reg.establishment_name && (
+                                                        <span className="text-[10px] text-gray-500 font-bold ml-1 flex items-center">
+                                                            <span className="material-symbols-outlined text-[12px] mr-1">person</span>
+                                                            {reg.establishment_name}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-8 py-5">
                                                 <div className="flex justify-center space-x-2">
@@ -1674,13 +1685,43 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Origem do Lead</label>
-                                    <select value={editingClient?.purchase_location || 'site_oficial'} onChange={e => setEditingClient({ ...editingClient, purchase_location: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
+                                    <select
+                                        value={editingClient?.purchase_location || 'site_oficial'}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const updates: any = { purchase_location: val };
+                                            if (val !== 'revendedor') {
+                                                updates.reseller_id = null;
+                                                updates.establishment_name = null;
+                                            }
+                                            setEditingClient({ ...editingClient, ...updates });
+                                        }}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                    >
                                         <option value="site_oficial">🛒 Site Oficial</option>
-                                        <option value="farmacia">🏥 Farmácia / Loja</option>
-                                        <option value="clinica">🩺 Clínica Parceira</option>
-                                        <option value="revendedor">🤝 Revendedor Autônomo</option>
+                                        <option value="loja_fisica">🏬 Loja Física</option>
+                                        <option value="tiktok_shop">📱 TikTok Shop</option>
+                                        <option value="revendedor">🤝 Revendedor</option>
                                     </select>
                                 </div>
+
+                                {editingClient?.purchase_location === 'revendedor' && (
+                                    <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Selecionar Revendedor</label>
+                                        <select
+                                            value={editingClient?.reseller_id || ''}
+                                            onChange={e => {
+                                                const sel = resellers.find(r => r.id === e.target.value);
+                                                setEditingClient({ ...editingClient, reseller_id: e.target.value, establishment_name: sel?.name });
+                                            }}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                            required={editingClient?.purchase_location === 'revendedor'}
+                                        >
+                                            <option value="">Selecione um Revendedor</option>
+                                            {resellers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                        </select>
+                                    </div>
+                                )}
                                 <div className="flex space-x-6 pt-6">
                                     <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Descartar</button>
                                     <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Sincronizar Dados</button>
