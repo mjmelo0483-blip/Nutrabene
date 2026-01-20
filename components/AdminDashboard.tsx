@@ -91,6 +91,14 @@ interface CreditCard {
     due_day: number;
 }
 
+const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+    const [year, month, day] = dateStr.split('-');
+    if (!year || !month || !day) return dateStr;
+    return `${day}/${month}/${year}`;
+};
+
 const AdminDashboard: React.FC = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -805,7 +813,7 @@ const AdminDashboard: React.FC = () => {
                                     <span className="material-symbols-outlined">payments</span>
                                 </div>
                                 <p className="text-xs font-bold text-gray-400 uppercase">Receita Total</p>
-                                <p className="text-2xl font-black text-gray-800">R$ {sales.reduce((acc, s) => acc + s.total_price, 0).toLocaleString('pt-BR')}</p>
+                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">R$ {sales.reduce((acc, s) => acc + s.total_price, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                             <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
                                 <div className="h-12 w-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
@@ -842,8 +850,8 @@ const AdminDashboard: React.FC = () => {
                                             <span className="material-symbols-outlined mr-3">arrow_upward</span>
                                             <span className="font-bold">Total a Receber</span>
                                         </div>
-                                        <span className="font-black text-green-600 text-lg">
-                                            R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR')}
+                                        <span className="font-black text-green-600 text-lg whitespace-nowrap">
+                                            R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center p-5 bg-red-50 rounded-2xl border border-red-100">
@@ -851,21 +859,21 @@ const AdminDashboard: React.FC = () => {
                                             <span className="material-symbols-outlined mr-3">arrow_downward</span>
                                             <span className="font-bold">Total a Pagar</span>
                                         </div>
-                                        <span className="font-black text-red-600 text-lg">
-                                            R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR')}
+                                        <span className="font-black text-red-600 text-lg whitespace-nowrap">
+                                            R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
                                     </div>
                                 </div>
                             </div>
                             <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10 flex flex-col justify-center items-center text-center">
                                 <p className="text-sm font-bold text-primary/60 uppercase tracking-widest mb-2">Disponível em Bancos</p>
-                                <p className="text-5xl font-black text-primary">
-                                    R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR')}
+                                <p className="text-4xl font-black text-primary whitespace-nowrap">
+                                    R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <div className="mt-6 flex space-x-2">
                                     {bankAccounts.map(b => (
-                                        <div key={b.id} className="bg-white px-3 py-1 rounded-full text-[10px] font-bold text-gray-500 border">
-                                            {b.name}: R$ {b.balance.toLocaleString('pt-BR')}
+                                        <div key={b.id} className="bg-white px-3 py-1 rounded-full text-[10px] font-bold text-gray-500 border whitespace-nowrap">
+                                            {b.name}: R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </div>
                                     ))}
                                 </div>
@@ -1079,8 +1087,8 @@ const AdminDashboard: React.FC = () => {
                                             {sales.map(s => (
                                                 <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
                                                     <td className="px-8 py-5">
-                                                        <div className="text-gray-500 font-medium">{new Date(s.sale_date).toLocaleDateString('pt-BR')}</div>
-                                                        <div className="text-[10px] text-amber-500 font-black uppercase">Venc: {s.due_date ? new Date(s.due_date).toLocaleDateString('pt-BR') : '-'}</div>
+                                                        <div className="text-gray-500 font-medium whitespace-nowrap">{formatDate(s.sale_date)}</div>
+                                                        <div className="text-[10px] text-amber-500 font-black uppercase whitespace-nowrap">Venc: {formatDate(s.due_date)}</div>
                                                     </td>
                                                     <td className="px-8 py-5">
                                                         <div className="font-bold text-gray-800">{products.find(p => p.id === s.product_id)?.name || 'Produto Excluído'}</div>
@@ -1090,7 +1098,7 @@ const AdminDashboard: React.FC = () => {
                                                         <div className="text-sm text-gray-600 font-bold">{resellers.find(r => r.id === s.reseller_id)?.name || 'Direta'}</div>
                                                     </td>
                                                     <td className="px-8 py-5 text-center font-bold">{s.quantity}</td>
-                                                    <td className="px-8 py-5 text-right font-black text-primary text-lg">R$ {s.total_price.toLocaleString('pt-BR')}</td>
+                                                    <td className="px-8 py-5 text-right font-black text-primary text-base whitespace-nowrap">R$ {s.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-8 py-5 text-center">
                                                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${s.payment_status === 'paid' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
                                                             {s.payment_status === 'paid' ? 'Pago' : 'Pendente'}
@@ -1164,15 +1172,15 @@ const AdminDashboard: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saldo Total Bancos</p>
-                                <p className="text-3xl font-black text-indigo-600">R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR')}</p>
+                                <p className="text-2xl font-black text-indigo-600 whitespace-nowrap">R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                             <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contas a Receber</p>
-                                <p className="text-3xl font-black text-green-600">R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR')}</p>
+                                <p className="text-2xl font-black text-green-600 whitespace-nowrap">R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                             <div className="bg-white p-8 rounded-3xl border shadow-sm flex flex-col justify-center">
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contas a Pagar</p>
-                                <p className="text-3xl font-black text-red-500">R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR')}</p>
+                                <p className="text-2xl font-black text-red-500 whitespace-nowrap">R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                             <button
                                 onClick={() => {
@@ -1208,15 +1216,15 @@ const AdminDashboard: React.FC = () => {
                                     <tbody className="divide-y text-sm">
                                         {financialEntries.map(entry => (
                                             <tr key={entry.id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-8 py-5 font-bold text-gray-400">{new Date(entry.due_date).toLocaleDateString('pt-BR')}</td>
+                                                <td className="px-8 py-5 font-bold text-gray-400 whitespace-nowrap">{formatDate(entry.due_date)}</td>
                                                 <td className="px-8 py-5">
                                                     <div className="font-black text-gray-800">{entry.description}</div>
                                                     <div className="text-[10px] text-gray-400 uppercase font-bold tracking-tighter">
                                                         {categories.find(c => c.id === (entry as any).category_id)?.name || entry.category}
                                                     </div>
                                                 </td>
-                                                <td className={`px-8 py-5 text-right font-black text-lg ${entry.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
-                                                    {entry.type === 'receivable' ? '+' : '-'} R$ {entry.amount.toLocaleString('pt-BR')}
+                                                <td className={`px-8 py-5 text-right font-black text-base whitespace-nowrap ${entry.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
+                                                    {entry.type === 'receivable' ? '+' : '-'} R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                                 <td className="px-8 py-5 text-center">
                                                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${entry.status === 'paid' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
@@ -1264,7 +1272,7 @@ const AdminDashboard: React.FC = () => {
                                         <div key={bank.id} className="bg-white p-6 rounded-3xl border shadow-sm flex justify-between items-center group">
                                             <div>
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{bank.name}</p>
-                                                <p className="text-2xl font-black text-gray-800">R$ {bank.balance.toLocaleString('pt-BR')}</p>
+                                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">R$ {bank.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             </div>
                                             <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button onClick={() => { setAccountForm(bank); setIsAccountModalOpen(true); }} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors">
@@ -1296,10 +1304,10 @@ const AdminDashboard: React.FC = () => {
                                             <div className="flex justify-between items-end">
                                                 <div>
                                                     <p className="text-xs text-gray-400 font-bold uppercase">Fatura Atual</p>
-                                                    <p className="text-2xl font-black text-red-500">R$ {card.current_balance.toLocaleString('pt-BR')}</p>
+                                                    <p className="text-xl font-black text-red-500 whitespace-nowrap">R$ {card.current_balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-[10px] text-gray-300 font-bold lowercase">Limite: R$ {card.limit_amount.toLocaleString('pt-BR')}</p>
+                                                    <p className="text-[10px] text-gray-300 font-bold lowercase whitespace-nowrap">Limite: R$ {card.limit_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                     <p className="text-[10px] text-gray-400 font-black">Vence dia {card.due_day}</p>
                                                 </div>
                                             </div>
