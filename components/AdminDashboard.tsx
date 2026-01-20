@@ -56,7 +56,7 @@ interface FinancialEntry {
     sale_id?: string;
     created_at?: string;
     entry_date?: string;
-    payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash' | 'other';
+    payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash' | 'other' | 'credit_acc';
     credit_card_id?: string;
     installments_total?: number;
     installment_number?: number;
@@ -1467,8 +1467,9 @@ const AdminDashboard: React.FC = () => {
                                     >
                                         <option value="cash">💵 Dinheiro</option>
                                         <option value="pix">📱 Pix</option>
-                                        <option value="debit_card">💳 Cartão de Débito</option>
+                                        <option value="debit_card">💳 Débito C/c</option>
                                         <option value="credit_card">💳 Cartão de Crédito</option>
+                                        <option value="credit_acc">💳 Crédito C/c</option>
                                         <option value="other"> outros</option>
                                     </select>
                                 </div>
