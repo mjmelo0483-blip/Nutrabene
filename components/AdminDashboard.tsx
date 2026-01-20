@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface Registration {
     id: string;
@@ -763,6 +765,151 @@ const AdminDashboard: React.FC = () => {
         } finally { setUploading(false); }
     }
 
+    const handleExportPDF = (reseller: Reseller, pendingSales: Sale[], totalCommission: number, totalNet: number) => {
+        const doc = new jsPDF();
+        const date = new Date().toLocaleDateString('pt-BR');
+
+        // Header Style
+        doc.setFillColor(243, 244, 246);
+        doc.rect(0, 0, 210, 40, 'F');
+
+        // Logo/Title
+        try {
+            doc.addImage('/assets/logo.png', 'PNG', 14, 10, 20, 20);
+        } catch (e) {
+            console.error('Error adding logo to PDF', e);
+        }
+
+        doc.setTextColor(31, 41, 55);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Nutrabene - Fechamento', 40, 22);
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Parceiro: ${reseller.name}`, 14, 28);
+        doc.text(`Data: ${date}`, 14, 33);
+
+        // Summary Cards
+        doc.setDrawColor(229, 231, 235);
+        doc.roundedRect(14, 45, 85, 25, 3, 3);
+        doc.roundedRect(110, 45, 85, 25, 3, 3);
+
+        doc.setFontSize(10);
+        doc.setTextColor(107, 114, 128);
+        doc.text('TOTAL COMISSÕES', 20, 52);
+        doc.text('TOTAL LÍQUIDO (ALCANCE)', 116, 52);
+
+        doc.setFontSize(16);
+        doc.setTextColor(217, 119, 6); // Amber for commissions
+        doc.text(`R$ ${totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 20, 62);
+
+        doc.setTextColor(5, 150, 105); // Green for net
+        doc.text(`R$ ${totalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 116, 62);
+
+        // Table
+        const tableData = pendingSales.map(s => [
+            formatDate(s.sale_date),
+            formatDate(s.due_date),
+            products.find(p => p.id === s.product_id)?.name || 'Produto Excluído',
+            s.quantity,
+            `R$ ${s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            `R$ ${s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ]);
+
+        autoTable(doc, {
+            startY: 80,
+            head: [['Venda', 'Vencimento', 'Produto', 'Qtd', 'Comissão', 'Líquido']],
+            body: tableData,
+            theme: 'striped',
+            headStyles: {
+                fillColor: [30, 64, 175], // Indigo/Blue
+                textColor: [255, 255, 255],
+                fontSize: 10,
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                3: { halign: 'center' },
+                4: { halign: 'right' },
+                5: { halign: 'right' }
+            },
+            bodyStyles: {
+                fontSize: 9
+            }
+        });
+
+        // Footer
+        const finalY = (doc as any).lastAutoTable.finalY + 20;
+        doc.setFontSize(8);
+        doc.setTextColor(156, 163, 175);
+        doc.text('Relatório gerado automaticamente pelo sistema Nutrabene.', 14, finalY);
+
+        doc.save(`Fechamento_${reseller.name.replace(/\s+/g, '_')}_${date.replace(/\//g, '-')}.pdf`);
+    };
+
+    const handleExportDashboardPDF = (month: number, year: number, revenue: number, discounts: number, commissions: number, net: number, ranking: any[]) => {
+        const doc = new jsPDF();
+        const date = new Date().toLocaleDateString('pt-BR');
+        const monthName = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][month];
+
+        // Header Style
+        doc.setFillColor(30, 64, 175);
+        doc.rect(0, 0, 210, 40, 'F');
+
+        // Logo/Title
+        try {
+            doc.addImage('/assets/logo.png', 'PNG', 14, 10, 20, 20);
+        } catch (e) {
+            console.error('Error adding logo to PDF', e);
+        }
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Resumo Mensal - ${monthName} / ${year}`, 40, 25);
+
+        // KPI Section
+        doc.setTextColor(31, 41, 55);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('RESUMO FINANCEIRO', 14, 50);
+
+        autoTable(doc, {
+            startY: 55,
+            head: [['Descrição', 'Valor']],
+            body: [
+                ['Faturamento Bruto', `R$ ${revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
+                ['Total Descontos', `R$ ${discounts.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
+                ['Comissões Devidas', `R$ ${commissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
+                ['Faturamento Líquido', `R$ ${net.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: [71, 85, 105] },
+            columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } }
+        });
+
+        // Ranking Section
+        const nextY = (doc as any).lastAutoTable.finalY + 15;
+        doc.setFontSize(10);
+        doc.text('RANKING DE PRODUTOS', 14, nextY);
+
+        autoTable(doc, {
+            startY: nextY + 5,
+            head: [['Pos', 'Produto', 'Qtd Vendida', 'Receita Líquida']],
+            body: ranking.map((p, i) => [i + 1, p.name, p.sold, `R$ ${p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`]),
+            theme: 'grid',
+            headStyles: { fillColor: [5, 150, 105] },
+            columnStyles: {
+                0: { halign: 'center' },
+                2: { halign: 'center' },
+                3: { halign: 'right' }
+            }
+        });
+
+        doc.save(`Relatorio_Nutrabene_${monthName}_${year}.pdf`);
+    };
+
     async function updateMessage() {
         const { error } = await supabase.from('reminder_settings').update({ message_template: settings.message_template }).eq('key', 'default');
         if (error) showNotification(`Erro ao salvar: ${error.message}`, 'error');
@@ -791,7 +938,7 @@ const AdminDashboard: React.FC = () => {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
                 <div className="bg-white w-full max-w-md rounded-3xl p-10 shadow-xl border border-gray-100">
-                    <img src="/logo.png" alt="Nutrabene" className="h-12 mx-auto mb-8" />
+                    <img src="/assets/logo.png" alt="Nutrabene" className="h-12 mx-auto mb-8" />
                     <h1 className="text-2xl font-black text-center mb-8">Gestão Administrativa</h1>
                     <form onSubmit={handleLogin} className="space-y-4">
                         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="w-full p-4 border rounded-2xl bg-gray-50 focus:ring-2 ring-primary/20 outline-none" required />
@@ -804,12 +951,28 @@ const AdminDashboard: React.FC = () => {
         );
     }
 
+    const filteredSales = sales.filter(s => {
+        const d = new Date(s.sale_date);
+        return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+    });
+
+    const totalRevenue = filteredSales.reduce((acc, s) => acc + s.total_price, 0);
+    const totalDiscounts = filteredSales.filter(s => !s.reseller_id).reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+    const totalCommissions = filteredSales.filter(s => !!s.reseller_id).reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+    const finalNet = totalRevenue - totalDiscounts - totalCommissions;
+
+    const productRanking = products.map((p: any) => ({
+        ...p,
+        sold: filteredSales.filter(s => s.product_id === p.id).reduce((acc, s) => acc + s.quantity, 0),
+        revenue: filteredSales.filter(s => s.product_id === p.id).reduce((acc, s) => acc + s.net_amount, 0)
+    })).filter((p: any) => p.sold > 0).sort((a: any, b: any) => b.sold - a.sold);
+
     return (
         <div className="min-h-screen bg-gray-50 flex">
             {/* Sidebar */}
             <aside className="w-72 bg-white border-r flex flex-col fixed inset-y-0 left-0 z-20">
                 <div className="p-8">
-                    <img src="/logo.png" alt="Nutrabene" className="h-10 mb-8" />
+                    <img src="/assets/logo.png" alt="Nutrabene" className="h-10 mb-8" />
                     <nav className="space-y-1">
                         {['dashboard', 'clients', 'inventory', 'sales', 'resellers', 'finances', 'accounts', 'categories', 'settings'].map((tab) => (
                             <button
@@ -865,155 +1028,143 @@ const AdminDashboard: React.FC = () => {
                                     <option key={y} value={y}>{y}</option>
                                 ))}
                             </select>
+                            <button
+                                onClick={() => handleExportDashboardPDF(filterMonth, filterYear, totalRevenue, totalDiscounts, totalCommissions, finalNet, productRanking)}
+                                className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-bold text-sm flex items-center hover:bg-red-600 hover:text-white transition-all border border-red-100"
+                            >
+                                <span className="material-symbols-outlined text-sm mr-2">picture_as_pdf</span> PDF
+                            </button>
                         </div>
                     )}
                 </header>
 
                 {/* Dashboard Tab */}
-                {activeTab === 'dashboard' && (() => {
-                    const filteredSales = sales.filter(s => {
-                        const d = new Date(s.sale_date);
-                        return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
-                    });
-
-                    const totalRevenue = filteredSales.reduce((acc, s) => acc + s.total_price, 0);
-                    const totalDiscounts = filteredSales.filter(s => !s.reseller_id).reduce((acc, s) => acc + (s.discount_amount || 0), 0);
-                    const totalCommissions = filteredSales.filter(s => !!s.reseller_id).reduce((acc, s) => acc + (s.discount_amount || 0), 0);
-                    const finalNet = totalRevenue - totalDiscounts - totalCommissions;
-
-                    const productRanking = products.map(p => ({
-                        ...p,
-                        sold: filteredSales.filter(s => s.product_id === p.id).reduce((acc, s) => acc + s.quantity, 0),
-                        revenue: filteredSales.filter(s => s.product_id === p.id).reduce((acc, s) => acc + s.net_amount, 0)
-                    })).filter(p => p.sold > 0).sort((a, b) => b.sold - a.sold);
-
-                    return (
-                        <div className="space-y-8 animate-in fade-in duration-500">
-                            {/* KPI Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
-                                    <div className="h-12 w-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
-                                        <span className="material-symbols-outlined">payments</span>
-                                    </div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase">Faturamento Bruto</p>
-                                    <p className="text-xl font-black text-gray-800 whitespace-nowrap">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">No mês selecionado</p>
+                {activeTab === 'dashboard' && (
+                    <div className="space-y-8 animate-in fade-in duration-500">
+                        {/* KPI Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
+                                <div className="h-12 w-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+                                    <span className="material-symbols-outlined">payments</span>
                                 </div>
-                                <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
-                                    <div className="h-12 w-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
-                                        <span className="material-symbols-outlined">sell</span>
-                                    </div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase">Total Descontos</p>
-                                    <p className="text-xl font-black text-red-600 whitespace-nowrap">R$ {totalDiscounts.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">Concedidos em vendas</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Faturamento Bruto</p>
+                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-[10px] text-gray-400 mt-1">No mês selecionado</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
+                                <div className="h-12 w-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+                                    <span className="material-symbols-outlined">sell</span>
                                 </div>
-                                <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
-                                    <div className="h-12 w-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
-                                        <span className="material-symbols-outlined">handshake</span>
-                                    </div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase">Comissões Devidas</p>
-                                    <p className="text-xl font-black text-amber-600 whitespace-nowrap">R$ {totalCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">Para revendedores</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Total Descontos</p>
+                                <p className="text-xl font-black text-red-600 whitespace-nowrap">R$ {totalDiscounts.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-[10px] text-gray-400 mt-1">Concedidos em vendas</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
+                                <div className="h-12 w-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+                                    <span className="material-symbols-outlined">handshake</span>
                                 </div>
-                                <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
-                                    <div className="h-12 w-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
-                                        <span className="material-symbols-outlined">account_balance_wallet</span>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Comissões Devidas</p>
+                                <p className="text-xl font-black text-amber-600 whitespace-nowrap">R$ {totalCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-[10px] text-gray-400 mt-1">Para revendedores</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl border shadow-sm group hover:border-primary transition-colors">
+                                <div className="h-12 w-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+                                    <span className="material-symbols-outlined">account_balance_wallet</span>
+                                </div>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Faturamento Líquido</p>
+                                <p className="text-xl font-black text-green-600 whitespace-nowrap">R$ {finalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-[10px] text-gray-400 mt-1">Após descontos e comissões</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="lg:col-span-2 space-y-8">
+                                <div className="bg-white p-8 rounded-3xl border shadow-sm">
+                                    <h3 className="text-lg font-bold mb-6 flex items-center justify-between">
+                                        <div className="flex items-center">
+                                            <span className="material-symbols-outlined mr-2 text-primary">analytics</span>
+                                            Ranking de Produtos Mais Vendidos
+                                        </div>
+                                        <span className="text-xs text-gray-400 font-medium">{filteredSales.length} vendas no período</span>
+                                    </h3>
+                                    <div className="space-y-4">
+                                        {productRanking.length === 0 ? (
+                                            <div className="text-center py-10 text-gray-400 font-bold border-2 border-dashed rounded-3xl">
+                                                Nenhuma venda registrada neste período.
+                                            </div>
+                                        ) : (
+                                            productRanking.map((p, idx) => (
+                                                <div key={p.id} className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-2xl transition-colors group">
+                                                    <div className="flex items-center space-x-4">
+                                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center font-black text-xs ${idx === 0 ? 'bg-amber-100 text-amber-600' : idx === 1 ? 'bg-gray-100 text-gray-600' : idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-gray-800">{p.name}</p>
+                                                            <p className="text-[10px] text-gray-400 uppercase font-black">{p.sold} unidades vendidas</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-sm font-black text-gray-800">R$ {p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                        <div className="w-32 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-primary"
+                                                                style={{ width: `${(p.sold / productRanking[0].sold) * 100}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase">Faturamento Líquido</p>
-                                    <p className="text-xl font-black text-green-600 whitespace-nowrap">R$ {finalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    <p className="text-[10px] text-gray-400 mt-1">Após descontos e comissões</p>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                <div className="lg:col-span-2 space-y-8">
-                                    <div className="bg-white p-8 rounded-3xl border shadow-sm">
-                                        <h3 className="text-lg font-bold mb-6 flex items-center justify-between">
-                                            <div className="flex items-center">
-                                                <span className="material-symbols-outlined mr-2 text-primary">analytics</span>
-                                                Ranking de Produtos Mais Vendidos
+                            <div className="space-y-8">
+                                <div className="bg-white p-8 rounded-3xl border shadow-sm">
+                                    <h3 className="text-lg font-bold mb-6 flex items-center">
+                                        <span className="material-symbols-outlined mr-2 text-primary">account_balance</span>
+                                        Finanças Pendentes
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-center p-5 bg-green-50 rounded-2xl border border-green-100">
+                                            <div className="flex items-center text-green-800">
+                                                <span className="material-symbols-outlined mr-3">arrow_upward</span>
+                                                <span className="font-bold">Total a Receber</span>
                                             </div>
-                                            <span className="text-xs text-gray-400 font-medium">{filteredSales.length} vendas no período</span>
-                                        </h3>
-                                        <div className="space-y-4">
-                                            {productRanking.length === 0 ? (
-                                                <div className="text-center py-10 text-gray-400 font-bold border-2 border-dashed rounded-3xl">
-                                                    Nenhuma venda registrada neste período.
-                                                </div>
-                                            ) : (
-                                                productRanking.map((p, idx) => (
-                                                    <div key={p.id} className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-2xl transition-colors group">
-                                                        <div className="flex items-center space-x-4">
-                                                            <div className={`h-8 w-8 rounded-full flex items-center justify-center font-black text-xs ${idx === 0 ? 'bg-amber-100 text-amber-600' : idx === 1 ? 'bg-gray-100 text-gray-600' : idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'}`}>
-                                                                {idx + 1}
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-bold text-gray-800">{p.name}</p>
-                                                                <p className="text-[10px] text-gray-400 uppercase font-black">{p.sold} unidades vendidas</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="text-sm font-black text-gray-800">R$ {p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                                            <div className="w-32 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
-                                                                <div
-                                                                    className="h-full bg-primary"
-                                                                    style={{ width: `${(p.sold / productRanking[0].sold) * 100}%` }}
-                                                                ></div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
+                                            <span className="font-black text-green-600 text-lg whitespace-nowrap">
+                                                R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center p-5 bg-red-50 rounded-2xl border border-red-100">
+                                            <div className="flex items-center text-red-800">
+                                                <span className="material-symbols-outlined mr-3">arrow_downward</span>
+                                                <span className="font-bold">Total a Pagar</span>
+                                            </div>
+                                            <span className="font-black text-red-600 text-lg whitespace-nowrap">
+                                                R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="space-y-8">
-                                    <div className="bg-white p-8 rounded-3xl border shadow-sm">
-                                        <h3 className="text-lg font-bold mb-6 flex items-center">
-                                            <span className="material-symbols-outlined mr-2 text-primary">account_balance</span>
-                                            Finanças Pendentes
-                                        </h3>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center p-5 bg-green-50 rounded-2xl border border-green-100">
-                                                <div className="flex items-center text-green-800">
-                                                    <span className="material-symbols-outlined mr-3">arrow_upward</span>
-                                                    <span className="font-bold">Total a Receber</span>
-                                                </div>
-                                                <span className="font-black text-green-600 text-lg whitespace-nowrap">
-                                                    R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </span>
+                                <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10 flex flex-col justify-center items-center text-center">
+                                    <p className="text-sm font-bold text-primary/60 uppercase tracking-widest mb-2">Disponível em Bancos</p>
+                                    <p className="text-4xl font-black text-primary whitespace-nowrap">
+                                        R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </p>
+                                    <div className="mt-6 flex flex-wrap justify-center gap-2">
+                                        {bankAccounts.map(b => (
+                                            <div key={b.id} className="bg-white px-3 py-1 rounded-full text-[10px] font-bold text-gray-500 border whitespace-nowrap">
+                                                {b.name}: R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </div>
-                                            <div className="flex justify-between items-center p-5 bg-red-50 rounded-2xl border border-red-100">
-                                                <div className="flex items-center text-red-800">
-                                                    <span className="material-symbols-outlined mr-3">arrow_downward</span>
-                                                    <span className="font-bold">Total a Pagar</span>
-                                                </div>
-                                                <span className="font-black text-red-600 text-lg whitespace-nowrap">
-                                                    R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10 flex flex-col justify-center items-center text-center">
-                                        <p className="text-sm font-bold text-primary/60 uppercase tracking-widest mb-2">Disponível em Bancos</p>
-                                        <p className="text-4xl font-black text-primary whitespace-nowrap">
-                                            R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </p>
-                                        <div className="mt-6 flex flex-wrap justify-center gap-2">
-                                            {bankAccounts.map(b => (
-                                                <div key={b.id} className="bg-white px-3 py-1 rounded-full text-[10px] font-bold text-gray-500 border whitespace-nowrap">
-                                                    {b.name}: R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </div>
-                                            ))}
-                                        </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    );
-                })()}
+                    </div>
+                )}
 
                 {/* Clients Tab */}
                 {activeTab === 'clients' && (
@@ -1861,6 +2012,12 @@ const AdminDashboard: React.FC = () => {
                                     className="flex-1 py-4 font-bold text-gray-400 hover:text-gray-600 transition-colors"
                                 >
                                     Voltar
+                                </button>
+                                <button
+                                    onClick={() => handleExportPDF(selectedResellerForClosing, pendingSales, totalPendingCommission, totalPendingNet)}
+                                    className="flex-1 bg-gray-100 text-gray-700 py-4 rounded-2xl font-black shadow-sm flex items-center justify-center hover:bg-gray-200 transition-all"
+                                >
+                                    <span className="material-symbols-outlined mr-2">picture_as_pdf</span> PDF
                                 </button>
                                 <button
                                     disabled={pendingSales.length === 0}
