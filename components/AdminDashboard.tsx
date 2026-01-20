@@ -70,7 +70,10 @@ interface Sale {
     client_id?: string;
     quantity: number;
     unit_price: number;
-    total_price: number;
+    total_price: number; // Gross total
+    discount_percentage: number;
+    discount_amount: number;
+    net_amount: number; // Final amount to receive
     sale_date: string;
     due_date?: string;
     payment_status: string;
@@ -138,6 +141,10 @@ const AdminDashboard: React.FC = () => {
     const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
     const [saleForm, setSaleForm] = useState<Partial<Sale>>({
         quantity: 1,
+        discount_percentage: 0,
+        discount_amount: 0,
+        total_price: 0,
+        net_amount: 0,
         sale_date: new Date().toISOString().split('T')[0],
         due_date: new Date().toISOString().split('T')[0],
         payment_status: 'pending'
@@ -389,7 +396,7 @@ const AdminDashboard: React.FC = () => {
     // --- Sale Handlers ---
     async function handleRegisterSale(e: React.FormEvent) {
         e.preventDefault();
-        if (!saleForm.product_id || !saleForm.quantity || !saleForm.total_price) {
+        if (!saleForm.product_id || !saleForm.quantity || !saleForm.total_price || !saleForm.net_amount) {
             showNotification('Preencha os campos obrigatórios!', 'error');
             return;
         }
@@ -433,7 +440,7 @@ const AdminDashboard: React.FC = () => {
                 // Update the corresponding financial entry
                 await supabase.from('financial_entries')
                     .update({
-                        amount: saleForm.total_price,
+                        amount: saleForm.net_amount,
                         due_date: saleForm.due_date,
                         description: `Venda #${saleForm.id.slice(0, 8)} - ${product.name} (Editado)`
                     })
@@ -456,7 +463,7 @@ const AdminDashboard: React.FC = () => {
             await supabase.from('financial_entries').insert([{
                 type: 'receivable',
                 description: `Venda #${sale.id.slice(0, 8)} - ${product.name}`,
-                amount: saleForm.total_price,
+                amount: saleForm.net_amount,
                 due_date: saleForm.due_date || new Date().toISOString().split('T')[0],
                 status: 'pending',
                 category: 'Venda de Produto',
@@ -1051,6 +1058,9 @@ const AdminDashboard: React.FC = () => {
                                         product_id: products[0]?.id,
                                         unit_price: products[0]?.price || 0,
                                         total_price: products[0]?.price || 0,
+                                        discount_percentage: 0,
+                                        discount_amount: 0,
+                                        net_amount: products[0]?.price || 0,
                                         quantity: 1,
                                         sale_date: new Date().toISOString().split('T')[0],
                                         due_date: new Date().toISOString().split('T')[0],
@@ -1078,7 +1088,9 @@ const AdminDashboard: React.FC = () => {
                                                 <th className="px-8 py-5">Produto / Cliente</th>
                                                 <th className="px-8 py-5">Vendedor</th>
                                                 <th className="px-8 py-5 text-center">Quant.</th>
-                                                <th className="px-8 py-5 text-right">Total</th>
+                                                <th className="px-8 py-5 text-right">Total (Bruto)</th>
+                                                <th className="px-8 py-5 text-right">Desconto (%)</th>
+                                                <th className="px-8 py-5 text-right">Líquido</th>
                                                 <th className="px-8 py-5 text-center">Status</th>
                                                 <th className="px-8 py-5 text-center">Ações</th>
                                             </tr>
@@ -1098,7 +1110,12 @@ const AdminDashboard: React.FC = () => {
                                                         <div className="text-sm text-gray-600 font-bold">{resellers.find(r => r.id === s.reseller_id)?.name || 'Direta'}</div>
                                                     </td>
                                                     <td className="px-8 py-5 text-center font-bold">{s.quantity}</td>
-                                                    <td className="px-8 py-5 text-right font-black text-primary text-base whitespace-nowrap">R$ {s.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-8 py-5 text-right font-medium text-gray-500 text-xs whitespace-nowrap">R$ {s.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-8 py-5 text-right font-bold text-red-400 text-xs whitespace-nowrap">
+                                                        - R$ {(s.discount_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        <span className="block text-[8px] opacity-50">({s.discount_percentage || 0}%)</span>
+                                                    </td>
+                                                    <td className="px-8 py-5 text-right font-black text-primary text-base whitespace-nowrap">R$ {(s.net_amount || s.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-8 py-5 text-center">
                                                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${s.payment_status === 'paid' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
                                                             {s.payment_status === 'paid' ? 'Pago' : 'Pendente'}
@@ -1795,11 +1812,16 @@ const AdminDashboard: React.FC = () => {
                                             value={saleForm.product_id || ''}
                                             onChange={e => {
                                                 const p = products.find(prod => prod.id === e.target.value);
+                                                const gross = (p?.price || 0) * (saleForm.quantity || 1);
+                                                const discPerc = saleForm.discount_percentage || 0;
+                                                const discAmt = gross * (discPerc / 100);
                                                 setSaleForm({
                                                     ...saleForm,
                                                     product_id: e.target.value,
                                                     unit_price: p?.price || 0,
-                                                    total_price: (p?.price || 0) * (saleForm.quantity || 1)
+                                                    total_price: gross,
+                                                    discount_amount: discAmt,
+                                                    net_amount: gross - discAmt
                                                 });
                                             }}
                                             className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
@@ -1827,7 +1849,19 @@ const AdminDashboard: React.FC = () => {
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vendedor / Revendedor</label>
                                         <select
                                             value={saleForm.reseller_id || ''}
-                                            onChange={e => setSaleForm({ ...saleForm, reseller_id: e.target.value })}
+                                            onChange={e => {
+                                                const r = resellers.find(res => res.id === e.target.value);
+                                                const discPerc = r ? r.commission_rate : 0;
+                                                const gross = saleForm.total_price || 0;
+                                                const discAmt = gross * (discPerc / 100);
+                                                setSaleForm({
+                                                    ...saleForm,
+                                                    reseller_id: e.target.value,
+                                                    discount_percentage: discPerc,
+                                                    discount_amount: discAmt,
+                                                    net_amount: gross - discAmt
+                                                });
+                                            }}
                                             className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
                                         >
                                             <option value="">Venda Direta (Sem Revendedor)</option>
@@ -1843,10 +1877,15 @@ const AdminDashboard: React.FC = () => {
                                                 value={saleForm.quantity || 1}
                                                 onChange={e => {
                                                     const qty = parseInt(e.target.value);
+                                                    const gross = (saleForm.unit_price || 0) * qty;
+                                                    const discPerc = saleForm.discount_percentage || 0;
+                                                    const discAmt = gross * (discPerc / 100);
                                                     setSaleForm({
                                                         ...saleForm,
                                                         quantity: qty,
-                                                        total_price: (saleForm.unit_price || 0) * qty
+                                                        total_price: gross,
+                                                        discount_amount: discAmt,
+                                                        net_amount: gross - discAmt
                                                     });
                                                 }}
                                                 className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
@@ -1854,16 +1893,40 @@ const AdminDashboard: React.FC = () => {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Total (R$)</label>
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Desconto (%)</label>
                                             <input
                                                 type="number"
-                                                step="0.01"
-                                                value={saleForm.total_price || 0}
-                                                onChange={e => setSaleForm({ ...saleForm, total_price: parseFloat(e.target.value) })}
-                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-black text-primary"
-                                                required
+                                                step="0.1"
+                                                value={saleForm.discount_percentage || 0}
+                                                onChange={e => {
+                                                    const discPerc = parseFloat(e.target.value) || 0;
+                                                    const gross = saleForm.total_price || 0;
+                                                    const discAmt = gross * (discPerc / 100);
+                                                    setSaleForm({
+                                                        ...saleForm,
+                                                        discount_percentage: discPerc,
+                                                        discount_amount: discAmt,
+                                                        net_amount: gross - discAmt
+                                                    });
+                                                }}
+                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-bold text-red-500"
                                             />
                                         </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10 space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-500 font-bold">Total Bruto:</span>
+                                        <span className="font-black text-gray-800">R$ {saleForm.total_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-red-500">
+                                        <span className="font-bold">Desconto ({saleForm.discount_percentage}%):</span>
+                                        <span className="font-black">- R$ {saleForm.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-4 border-t border-primary/20">
+                                        <span className="text-primary font-black text-xl">Líquido a Receber:</span>
+                                        <span className="text-primary font-black text-2xl">R$ {saleForm.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                 </div>
 
