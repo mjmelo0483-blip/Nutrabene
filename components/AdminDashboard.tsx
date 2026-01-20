@@ -749,7 +749,7 @@ const AdminDashboard: React.FC = () => {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 ml-72 p-12">
+            <main className="flex-1 ml-72 p-12 pb-32">
                 <header className="flex justify-between items-start mb-12">
                     <div>
                         <h1 className="text-3xl font-black text-gray-800 capitalize">

@@ -122,22 +122,26 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark transition-colors duration-300">
-      <Header
-        currentSection={currentSection}
-        onNavigate={(section) => {
-          setSelectedProduct(null);
-          setCurrentSection(section);
-        }}
-      />
+      {currentSection !== 'admin' && (
+        <Header
+          currentSection={currentSection}
+          onNavigate={(section) => {
+            setSelectedProduct(null);
+            setCurrentSection(section);
+          }}
+        />
+      )}
 
       <main className="flex-1">
         {renderContent()}
       </main>
 
-      <Footer onNavigate={(section) => {
-        setSelectedProduct(null);
-        setCurrentSection(section);
-      }} />
+      {currentSection !== 'admin' && (
+        <Footer onNavigate={(section) => {
+          setSelectedProduct(null);
+          setCurrentSection(section);
+        }} />
+      )}
 
       {/* Floating Action Button for AI Assistant */}
       <button
