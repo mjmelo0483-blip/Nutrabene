@@ -57,10 +57,12 @@ interface Sale {
     id: string;
     product_id: string;
     reseller_id?: string;
+    client_id?: string;
     quantity: number;
     unit_price: number;
     total_price: number;
     sale_date: string;
+    due_date?: string;
     payment_status: string;
 }
 
@@ -90,6 +92,14 @@ const AdminDashboard: React.FC = () => {
 
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Partial<ProductInventory> | null>(null);
+
+    const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+    const [saleForm, setSaleForm] = useState<Partial<Sale>>({
+        quantity: 1,
+        sale_date: new Date().toISOString().split('T')[0],
+        due_date: new Date().toISOString().split('T')[0],
+        payment_status: 'pending'
+    });
 
     // Check current session
     useEffect(() => {
@@ -249,35 +259,49 @@ const AdminDashboard: React.FC = () => {
     }
 
     // --- Sale Handlers ---
-    async function handleRegisterSale(saleData: any) {
+    async function handleRegisterSale(e: React.FormEvent) {
+        e.preventDefault();
+        if (!saleForm.product_id || !saleForm.quantity || !saleForm.total_price) {
+            alert('Preencha os campos obrigatórios!');
+            return;
+        }
+
         // 1. Check stock
-        const product = products.find(p => p.id === saleData.product_id);
-        if (!product || product.stock_quantity < saleData.quantity) {
+        const product = products.find(p => p.id === saleForm.product_id);
+        if (!product || product.stock_quantity < (saleForm.quantity || 0)) {
             alert('Estoque insuficiente para esta venda!');
             return;
         }
 
         // 2. Insert sale
-        const { data: sale, error: saleError } = await supabase.from('sales').insert([saleData]).select().single();
+        const { data: sale, error: saleError } = await supabase.from('sales').insert([saleForm]).select().single();
         if (saleError) { alert(saleError.message); return; }
 
         // 3. Update stock
-        await handleUpdateStock(saleData.product_id, product.stock_quantity - saleData.quantity);
+        await handleUpdateStock(saleForm.product_id, product.stock_quantity - (saleForm.quantity || 0));
 
         // 4. Create financial entry (Receivable)
         await supabase.from('financial_entries').insert([{
             type: 'receivable',
             description: `Venda #${sale.id.slice(0, 8)} - ${product.name}`,
-            amount: saleData.total_price,
-            due_date: new Date().toISOString().split('T')[0],
+            amount: saleForm.total_price,
+            due_date: saleForm.due_date || new Date().toISOString().split('T')[0],
             status: 'pending',
             category: 'Venda de Produto',
             sale_id: sale.id,
-            reseller_id: saleData.reseller_id
+            reseller_id: saleForm.reseller_id,
+            client_id: saleForm.client_id
         }]);
 
         alert('Venda registrada com sucesso!');
+        setIsSaleModalOpen(false);
         fetchData();
+        setSaleForm({
+            quantity: 1,
+            sale_date: new Date().toISOString().split('T')[0],
+            due_date: new Date().toISOString().split('T')[0],
+            payment_status: 'pending'
+        });
     }
 
     // --- Financial Handlers ---
@@ -657,20 +681,20 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <button
                                 onClick={() => {
-                                    const prodId = products[0]?.id;
-                                    const price = products[0]?.price || 0;
-                                    const qty = 1;
-                                    handleRegisterSale({
-                                        product_id: prodId,
-                                        quantity: qty,
-                                        unit_price: price,
-                                        total_price: price * qty,
+                                    setSaleForm({
+                                        product_id: products[0]?.id,
+                                        unit_price: products[0]?.price || 0,
+                                        total_price: products[0]?.price || 0,
+                                        quantity: 1,
+                                        sale_date: new Date().toISOString().split('T')[0],
+                                        due_date: new Date().toISOString().split('T')[0],
                                         payment_status: 'pending'
                                     });
+                                    setIsSaleModalOpen(true);
                                 }}
                                 className="bg-primary text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-primary/20 flex items-center"
                             >
-                                <span className="material-symbols-outlined mr-2">add_shopping_cart</span> Nova Venda Rápida
+                                <span className="material-symbols-outlined mr-2">add_shopping_cart</span> Novo Lançamento de Venda
                             </button>
                         </div>
 
@@ -684,8 +708,9 @@ const AdminDashboard: React.FC = () => {
                                     <table className="w-full">
                                         <thead className="bg-gray-50 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                             <tr>
-                                                <th className="px-8 py-5">Data</th>
-                                                <th className="px-8 py-5">Produto</th>
+                                                <th className="px-8 py-5">Venda / Venc.</th>
+                                                <th className="px-8 py-5">Produto / Cliente</th>
+                                                <th className="px-8 py-5">Vendedor</th>
                                                 <th className="px-8 py-5 text-center">Quant.</th>
                                                 <th className="px-8 py-5">Total</th>
                                                 <th className="px-8 py-5">Status</th>
@@ -694,8 +719,17 @@ const AdminDashboard: React.FC = () => {
                                         <tbody className="divide-y text-sm">
                                             {sales.map(s => (
                                                 <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                                                    <td className="px-8 py-5 text-gray-500 font-medium">{new Date(s.sale_date).toLocaleDateString('pt-BR')}</td>
-                                                    <td className="px-8 py-5 font-bold text-gray-800">{products.find(p => p.id === s.product_id)?.name || 'Produto Excluído'}</td>
+                                                    <td className="px-8 py-5">
+                                                        <div className="text-gray-500 font-medium">{new Date(s.sale_date).toLocaleDateString('pt-BR')}</div>
+                                                        <div className="text-[10px] text-amber-500 font-black uppercase">Venc: {s.due_date ? new Date(s.due_date).toLocaleDateString('pt-BR') : '-'}</div>
+                                                    </td>
+                                                    <td className="px-8 py-5">
+                                                        <div className="font-bold text-gray-800">{products.find(p => p.id === s.product_id)?.name || 'Produto Excluído'}</div>
+                                                        <div className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">{registrations.find(c => c.id === s.client_id)?.name || 'Venda Avulsa'}</div>
+                                                    </td>
+                                                    <td className="px-8 py-5">
+                                                        <div className="text-sm text-gray-600 font-bold">{resellers.find(r => r.id === s.reseller_id)?.name || 'Direta'}</div>
+                                                    </td>
                                                     <td className="px-8 py-5 text-center font-bold">{s.quantity}</td>
                                                     <td className="px-8 py-5 font-black text-primary">R$ {s.total_price.toLocaleString('pt-BR')}</td>
                                                     <td className="px-8 py-5">
@@ -984,6 +1018,126 @@ const AdminDashboard: React.FC = () => {
                             <div className="flex space-x-6 pt-6">
                                 <button type="button" onClick={() => setIsProductModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Voltar</button>
                                 <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Confirmar Registro</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {isSaleModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-2xl rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-10">
+                            <h2 className="text-3xl font-black text-gray-800">Lançar Nova Venda</h2>
+                            <button onClick={() => setIsSaleModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <form onSubmit={handleRegisterSale} className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Produto</label>
+                                    <select
+                                        value={saleForm.product_id || ''}
+                                        onChange={e => {
+                                            const p = products.find(prod => prod.id === e.target.value);
+                                            setSaleForm({
+                                                ...saleForm,
+                                                product_id: e.target.value,
+                                                unit_price: p?.price || 0,
+                                                total_price: (p?.price || 0) * (saleForm.quantity || 1)
+                                            });
+                                        }}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                        required
+                                    >
+                                        <option value="">Selecione o Produto</option>
+                                        {products.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Cliente</label>
+                                    <select
+                                        value={saleForm.client_id || ''}
+                                        onChange={e => setSaleForm({ ...saleForm, client_id: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Selecione o Cliente (Opcional)</option>
+                                        {registrations.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Vendedor / Revendedor</label>
+                                    <select
+                                        value={saleForm.reseller_id || ''}
+                                        onChange={e => setSaleForm({ ...saleForm, reseller_id: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Venda Direta (Sem Revendedor)</option>
+                                        {resellers.map(r => <option key={r.id} value={r.id}>{r.name} ({r.commission_rate}%)</option>)}
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Quantidade</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            value={saleForm.quantity || 1}
+                                            onChange={e => {
+                                                const qty = parseInt(e.target.value);
+                                                setSaleForm({
+                                                    ...saleForm,
+                                                    quantity: qty,
+                                                    total_price: (saleForm.unit_price || 0) * qty
+                                                });
+                                            }}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Total (R$)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={saleForm.total_price || 0}
+                                            onChange={e => setSaleForm({ ...saleForm, total_price: parseFloat(e.target.value) })}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-black text-primary"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data da Venda</label>
+                                    <input
+                                        type="date"
+                                        value={saleForm.sale_date || ''}
+                                        onChange={e => setSaleForm({ ...saleForm, sale_date: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data de Vencimento</label>
+                                    <input
+                                        type="date"
+                                        value={saleForm.due_date || ''}
+                                        onChange={e => setSaleForm({ ...saleForm, due_date: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex space-x-6 pt-6">
+                                <button type="button" onClick={() => setIsSaleModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Cancelar</button>
+                                <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Registrar Venda</button>
                             </div>
                         </form>
                     </div>
