@@ -1976,17 +1976,17 @@ const AdminDashboard: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-3 gap-4 mb-6">
-                                <div className="bg-blue-50 p-5 rounded-3xl border border-blue-100">
-                                    <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Total Vendido</p>
-                                    <p className="text-xl font-black text-blue-700">R$ {totalPendingGross.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <div className="bg-blue-50 p-4 rounded-3xl border border-blue-100">
+                                    <p className="text-[10px] font-black text-blue-600 uppercase mb-1 whitespace-nowrap">Total Vendido</p>
+                                    <p className="text-lg font-black text-blue-700 whitespace-nowrap">R$ {totalPendingGross.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
-                                <div className="bg-amber-50 p-5 rounded-3xl border border-amber-100">
-                                    <p className="text-[10px] font-black text-amber-600 uppercase mb-1">Total Comissões</p>
-                                    <p className="text-xl font-black text-amber-700">R$ {totalPendingCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <div className="bg-amber-50 p-4 rounded-3xl border border-amber-100">
+                                    <p className="text-[10px] font-black text-amber-600 uppercase mb-1 whitespace-nowrap">Total Comissões</p>
+                                    <p className="text-lg font-black text-amber-700 whitespace-nowrap">R$ {totalPendingCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
-                                <div className="bg-primary/5 p-5 rounded-3xl border border-primary/10">
-                                    <p className="text-[10px] font-black text-primary uppercase mb-1">Total Líquido</p>
-                                    <p className="text-xl font-black text-primary">R$ {totalPendingNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <div className="bg-primary/5 p-4 rounded-3xl border border-primary/10">
+                                    <p className="text-[10px] font-black text-primary uppercase mb-1 whitespace-nowrap">Total Líquido</p>
+                                    <p className="text-lg font-black text-primary whitespace-nowrap">R$ {totalPendingNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                             </div>
 
