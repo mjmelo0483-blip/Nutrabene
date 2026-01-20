@@ -1970,11 +1970,11 @@ const AdminDashboard: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4 mb-6">
                                 <div className="bg-amber-50 p-5 rounded-3xl border border-amber-100">
                                     <p className="text-[10px] font-black text-amber-600 uppercase mb-1">Total Comissões</p>
-                                    <p className="text-2xl font-black text-amber-700">R$ {totalPendingCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-2xl font-black text-amber-700">R$ {totalPendingCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                                 <div className="bg-primary/5 p-5 rounded-3xl border border-primary/10">
-                                    <p className="text-[10px] font-black text-primary uppercase mb-1">A Acertar (Líquido)</p>
-                                    <p className="text-2xl font-black text-primary">R$ {totalPendingNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-[10px] font-black text-primary uppercase mb-1">Total Líquido</p>
+                                    <p className="text-2xl font-black text-primary">R$ {totalPendingNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                             </div>
 
@@ -2002,8 +2002,8 @@ const AdminDashboard: React.FC = () => {
                                                     <td className="px-3 py-4 font-bold text-amber-500">{formatDate(s.due_date)}</td>
                                                     <td className="px-3 py-4 font-bold text-gray-700">{products.find(p => p.id === s.product_id)?.name}</td>
                                                     <td className="px-3 py-4 text-right font-bold">{s.quantity}</td>
-                                                    <td className="px-3 py-4 text-right font-black text-amber-600">R$ {s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                                    <td className="px-3 py-4 text-right font-black text-primary">R$ {s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-3 py-4 text-right font-black text-amber-600">R$ {s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-3 py-4 text-right font-black text-primary">R$ {s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                 </tr>
                                             ))
                                         )}
