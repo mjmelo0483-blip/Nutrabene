@@ -798,14 +798,14 @@ const AdminDashboard: React.FC = () => {
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128);
         doc.text('TOTAL COMISSÕES', 20, 52);
-        doc.text('TOTAL LÍQUIDO (ALCANCE)', 116, 52);
+        doc.text('TOTAL LÍQUIDO', 116, 52);
 
         doc.setFontSize(16);
         doc.setTextColor(217, 119, 6); // Amber for commissions
-        doc.text(`R$ ${totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 20, 62);
+        doc.text(`R$ ${totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 20, 62);
 
         doc.setTextColor(5, 150, 105); // Green for net
-        doc.text(`R$ ${totalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 116, 62);
+        doc.text(`R$ ${totalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 116, 62);
 
         // Table
         const tableData = pendingSales.map(s => [
@@ -813,8 +813,8 @@ const AdminDashboard: React.FC = () => {
             formatDate(s.due_date),
             products.find(p => p.id === s.product_id)?.name || 'Produto Excluído',
             s.quantity,
-            `R$ ${s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `R$ ${s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            `R$ ${s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            `R$ ${s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         ]);
 
         autoTable(doc, {
@@ -884,10 +884,10 @@ const AdminDashboard: React.FC = () => {
             startY: 55,
             head: [['Descrição', 'Valor']],
             body: [
-                ['Faturamento Bruto', `R$ ${revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
-                ['Total Descontos', `R$ ${discounts.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
-                ['Comissões Devidas', `R$ ${commissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
-                ['Faturamento Líquido', `R$ ${net.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
+                ['Faturamento Bruto', `R$ ${revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+                ['Total Descontos', `R$ ${discounts.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+                ['Comissões Devidas', `R$ ${commissions.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+                ['Faturamento Líquido', `R$ ${net.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
             ],
             theme: 'striped',
             headStyles: { fillColor: [30, 64, 175] },
@@ -902,7 +902,7 @@ const AdminDashboard: React.FC = () => {
         autoTable(doc, {
             startY: nextY + 5,
             head: [['Pos', 'Produto', 'Qtd Vendida', 'Receita Líquida']],
-            body: ranking.map((p, i) => [i + 1, p.name, p.sold, `R$ ${p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`]),
+            body: ranking.map((p, i) => [i + 1, p.name, p.sold, `R$ ${p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`]),
             theme: 'grid',
             headStyles: { fillColor: [30, 64, 175] },
             columnStyles: {
