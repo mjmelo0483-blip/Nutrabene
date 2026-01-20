@@ -1657,30 +1657,30 @@ const AdminDashboard: React.FC = () => {
             {
                 isModalOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-                        <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
-                            <div className="flex justify-between items-center mb-10">
-                                <h2 className="text-3xl font-black text-gray-800">{editingClient?.id ? 'Editar Cadastro' : 'Novo Cliente'}</h2>
-                                <button onClick={() => setIsModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
-                                    <span className="material-symbols-outlined">close</span>
+                        <div className="bg-white w-full max-w-lg rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh]">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-black text-gray-800">{editingClient?.id ? 'Editar Cadastro' : 'Novo Cliente'}</h2>
+                                <button onClick={() => setIsModalOpen(false)} className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                    <span className="material-symbols-outlined text-sm">close</span>
                                 </button>
                             </div>
-                            <form onSubmit={handleSaveClient} className="space-y-6">
+                            <form onSubmit={handleSaveClient} className="space-y-4">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Dados Principais</label>
-                                    <input type="text" value={editingClient?.name || ''} onChange={e => setEditingClient({ ...editingClient, name: e.target.value })} placeholder="Nome Completo" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    <input type="text" value={editingClient?.name || ''} onChange={e => setEditingClient({ ...editingClient, name: e.target.value })} placeholder="Nome Completo" className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input type="email" value={editingClient?.email || ''} onChange={e => setEditingClient({ ...editingClient, email: e.target.value })} placeholder="Email Principal" className="p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                                    <input type="text" value={editingClient?.whatsapp || ''} onChange={e => setEditingClient({ ...editingClient, whatsapp: e.target.value })} placeholder="WhatsApp" className="p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    <input type="email" value={editingClient?.email || ''} onChange={e => setEditingClient({ ...editingClient, email: e.target.value })} placeholder="Email Principal" className="p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    <input type="text" value={editingClient?.whatsapp || ''} onChange={e => setEditingClient({ ...editingClient, whatsapp: e.target.value })} placeholder="WhatsApp" className="p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <label className="block">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nascimento</span>
-                                        <input type="date" value={editingClient?.birth_date || ''} onChange={e => setEditingClient({ ...editingClient, birth_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                        <input type="date" value={editingClient?.birth_date || ''} onChange={setEditingClient && (e => setEditingClient({ ...editingClient, birth_date: e.target.value }))} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                     </label>
                                     <label className="block">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Check-in Sono</span>
-                                        <input type="time" value={editingClient?.sleep_schedule || ''} onChange={e => setEditingClient({ ...editingClient, sleep_schedule: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                        <input type="time" value={editingClient?.sleep_schedule || ''} onChange={setEditingClient && (e => setEditingClient({ ...editingClient, sleep_schedule: e.target.value }))} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                     </label>
                                 </div>
                                 <div className="space-y-2">
