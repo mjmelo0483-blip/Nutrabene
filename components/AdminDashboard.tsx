@@ -502,11 +502,34 @@ const AdminDashboard: React.FC = () => {
         const entryData = { ...financialForm, category };
 
         try {
+            const bankId = entryData.bank_account_id || bankAccounts[0]?.id;
+            const bank = bankAccounts.find(b => b.id === bankId);
+
             if (entryData.id) {
                 // Update existing
+                const { data: oldEntry } = await supabase.from('financial_entries').select('*').eq('id', entryData.id).single();
                 const { id, ...updateData } = entryData;
+
                 const { error } = await supabase.from('financial_entries').update(updateData).eq('id', id);
                 if (error) throw error;
+
+                // Update bank balance if status changed to/from 'paid'
+                if (bank && oldEntry && oldEntry.status !== entryData.status) {
+                    let balanceAdjustment = 0;
+                    if (entryData.status === 'paid') {
+                        // Just paid
+                        balanceAdjustment = entryData.type === 'receivable' ? entryData.amount : -entryData.amount;
+                    } else if (oldEntry.status === 'paid') {
+                        // Was paid, now reverted
+                        balanceAdjustment = oldEntry.type === 'receivable' ? -oldEntry.amount : oldEntry.amount;
+                    }
+
+                    if (balanceAdjustment !== 0) {
+                        await supabase.from('bank_accounts')
+                            .update({ balance: bank.balance + balanceAdjustment })
+                            .eq('id', bank.id);
+                    }
+                }
             } else {
                 // Create New (handle installments if credit card)
                 const installments = entryData.payment_method === 'credit_card' ? (entryData.installments_total || 1) : 1;
@@ -518,13 +541,13 @@ const AdminDashboard: React.FC = () => {
                     const entryDate = new Date(entryData.entry_date || new Date());
                     const dueDate = new Date(entryData.due_date || new Date());
 
-                    // Add months for installments
                     if (i > 1) {
                         dueDate.setMonth(dueDate.getMonth() + (i - 1));
                     }
 
                     entriesToInsert.push({
                         ...entryData,
+                        bank_account_id: bankId,
                         amount: i === installments ? parseFloat((baseAmount - (installmentAmount * (installments - 1))).toFixed(2)) : installmentAmount,
                         due_date: dueDate.toISOString().split('T')[0],
                         installment_number: i,
@@ -535,6 +558,14 @@ const AdminDashboard: React.FC = () => {
 
                 const { error } = await supabase.from('financial_entries').insert(entriesToInsert);
                 if (error) throw error;
+
+                // Updated balance immediately if new entry is ALREADY paid
+                if (bank && entryData.status === 'paid') {
+                    const balanceAdjustment = entryData.type === 'receivable' ? baseAmount : -baseAmount;
+                    await supabase.from('bank_accounts')
+                        .update({ balance: bank.balance + balanceAdjustment })
+                        .eq('id', bank.id);
+                }
 
                 // Impact Credit Card Balance if it's a credit card expense
                 if (entryData.payment_method === 'credit_card' && entryData.credit_card_id && entryData.type === 'payable') {
@@ -1504,7 +1535,7 @@ const AdminDashboard: React.FC = () => {
                             )}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Status do Lançamento</label>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Status</label>
                                     <select
                                         value={financialForm.status || 'pending'}
                                         onChange={e => setFinancialForm({ ...financialForm, status: e.target.value as any })}
@@ -1516,14 +1547,27 @@ const AdminDashboard: React.FC = () => {
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Categoria</label>
-                                    <select value={(financialForm as any).category_id || ''} onChange={e => setFinancialForm({ ...financialForm, category_id: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
-                                        <option value="">Selecione a Categoria</option>
-                                        {categories
-                                            .filter(c => (financialForm.type === 'receivable' ? c.type === 'income' : c.type === 'expense'))
-                                            .map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Conta Bancária</label>
+                                    <select
+                                        value={financialForm.bank_account_id || ''}
+                                        onChange={e => setFinancialForm({ ...financialForm, bank_account_id: e.target.value })}
+                                        className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                        required={financialForm.status === 'paid' && financialForm.payment_method !== 'credit_card'}
+                                    >
+                                        <option value="">Selecione a Conta</option>
+                                        {bankAccounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
                                     </select>
                                 </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Categoria</label>
+                                <select value={(financialForm as any).category_id || ''} onChange={e => setFinancialForm({ ...financialForm, category_id: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
+                                    <option value="">Selecione a Categoria</option>
+                                    {categories
+                                        .filter(c => (financialForm.type === 'receivable' ? c.type === 'income' : c.type === 'expense'))
+                                        .map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                                </select>
                             </div>
                             <div className="flex space-x-6 pt-6">
                                 <button type="button" onClick={() => setIsFinancialModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400">Descartar</button>
