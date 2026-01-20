@@ -18,6 +18,13 @@ interface ReminderSettings {
     media_url?: string;
 }
 
+interface ProductInventory {
+    id: string;
+    name: string;
+    stock_quantity: number;
+    price: number;
+}
+
 const AdminDashboard: React.FC = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -27,7 +34,9 @@ const AdminDashboard: React.FC = () => {
 
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [settings, setSettings] = useState<ReminderSettings>({ message_template: '' });
+    const [products, setProducts] = useState<ProductInventory[]>([]);
     const [uploading, setUploading] = useState(false);
+    const [updatingStock, setUpdatingStock] = useState<string | null>(null);
     const [dataError, setDataError] = useState('');
 
     // Modal State for CRUD
@@ -74,10 +83,15 @@ const AdminDashboard: React.FC = () => {
         setDataError('');
         const { data: regs, error: regError } = await supabase.from('registrations').select('*').order('created_at', { ascending: false });
         const { data: sett, error: settError } = await supabase.from('reminder_settings').select('message_template, media_url').eq('key', 'default').single();
+        const { data: prods, error: prodError } = await supabase.from('products').select('*').order('name');
+
         if (regError) setDataError(`Erro ao carregar clientes: ${regError.message}`);
         if (settError) setDataError(prev => prev ? `${prev} | ${settError.message}` : `Erro ao carregar configurações: ${settError.message}`);
+        if (prodError) setDataError(prev => prev ? `${prev} | ${prodError.message}` : `Erro ao carregar estoque: ${prodError.message}`);
+
         if (regs) setRegistrations(regs);
         if (sett) setSettings(sett);
+        if (prods) setProducts(prods);
     }
 
     // --- CRUD Operations ---
@@ -120,6 +134,23 @@ const AdminDashboard: React.FC = () => {
         } else {
             fetchData();
         }
+    }
+
+    // --- Stock Operations ---
+    async function handleUpdateStock(id: string, newQuantity: number) {
+        if (newQuantity < 0) return;
+        setUpdatingStock(id);
+        const { error } = await supabase
+            .from('products')
+            .update({ stock_quantity: newQuantity })
+            .eq('id', id);
+
+        if (error) {
+            alert(`Erro ao atualizar estoque: ${error.message}`);
+        } else {
+            setProducts(products.map(p => p.id === id ? { ...p, stock_quantity: newQuantity } : p));
+        }
+        setUpdatingStock(null);
     }
 
     // --- Messaging Settings ---
@@ -253,6 +284,71 @@ const AdminDashboard: React.FC = () => {
                                                         <span className="material-symbols-outlined">delete</span>
                                                     </button>
                                                 </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Stock Control Row - Full Width */}
+                <div className="lg:col-span-3">
+                    <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
+                        <div className="p-8 border-b">
+                            <h2 className="text-xl font-bold">Controle de Estoque</h2>
+                            <p className="text-sm text-gray-500">Gerencie a quantidade disponível dos produtos</p>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 text-left text-xs font-bold text-gray-500 uppercase">
+                                    <tr>
+                                        <th className="px-6 py-4">Produto</th>
+                                        <th className="px-6 py-4">Preço</th>
+                                        <th className="px-6 py-4 text-center">Quantidade em Estoque</th>
+                                        <th className="px-6 py-4 text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y text-sm">
+                                    {products.map(prod => (
+                                        <tr key={prod.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold">{prod.name}</div>
+                                                <div className="text-gray-500 text-xs">ID: {prod.id}</div>
+                                            </td>
+                                            <td className="px-6 py-4 font-medium">
+                                                R$ {Number(prod.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center justify-center space-x-4">
+                                                    <button
+                                                        onClick={() => handleUpdateStock(prod.id, prod.stock_quantity - 1)}
+                                                        disabled={updatingStock === prod.id || prod.stock_quantity <= 0}
+                                                        className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-30"
+                                                    >
+                                                        <span className="material-symbols-outlined">remove_circle_outline</span>
+                                                    </button>
+                                                    <span className={`text-lg font-bold w-12 text-center ${prod.stock_quantity <= 5 ? 'text-red-500' : 'text-gray-800'}`}>
+                                                        {prod.stock_quantity}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleUpdateStock(prod.id, prod.stock_quantity + 1)}
+                                                        disabled={updatingStock === prod.id}
+                                                        className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-30"
+                                                    >
+                                                        <span className="material-symbols-outlined">add_circle_outline</span>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                {prod.stock_quantity === 0 ? (
+                                                    <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold">Esgotado</span>
+                                                ) : prod.stock_quantity <= 5 ? (
+                                                    <span className="px-3 py-1 bg-amber-100 text-amber-600 rounded-full text-xs font-bold">Baixo Estoque</span>
+                                                ) : (
+                                                    <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-xs font-bold">Em Dia</span>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
