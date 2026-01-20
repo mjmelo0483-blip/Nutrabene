@@ -763,7 +763,7 @@ const AdminDashboard: React.FC = () => {
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center p-5 bg-green-50 rounded-2xl border border-green-100">
                                         <div className="flex items-center text-green-800">
-                                            <span className="material-symbols-outlined mr-3">arrow_downward</span>
+                                            <span className="material-symbols-outlined mr-3">arrow_upward</span>
                                             <span className="font-bold">Total a Receber</span>
                                         </div>
                                         <span className="font-black text-green-600 text-lg">
@@ -772,7 +772,7 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <div className="flex justify-between items-center p-5 bg-red-50 rounded-2xl border border-red-100">
                                         <div className="flex items-center text-red-800">
-                                            <span className="material-symbols-outlined mr-3">arrow_upward</span>
+                                            <span className="material-symbols-outlined mr-3">arrow_downward</span>
                                             <span className="font-bold">Total a Pagar</span>
                                         </div>
                                         <span className="font-black text-red-600 text-lg">
