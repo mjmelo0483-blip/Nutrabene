@@ -1826,7 +1826,8 @@ const AdminDashboard: React.FC = () => {
                                 <table className="w-full text-left">
                                     <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase sticky top-0">
                                         <tr>
-                                            <th className="px-3 py-3 rounded-l-xl">Data</th>
+                                            <th className="px-3 py-3 rounded-l-xl">Venda</th>
+                                            <th className="px-3 py-3">Vencimento</th>
                                             <th className="px-3 py-3">Produto</th>
                                             <th className="px-3 py-3 text-right">Qtd</th>
                                             <th className="px-3 py-3 text-right">Comissão</th>
@@ -1842,6 +1843,7 @@ const AdminDashboard: React.FC = () => {
                                             pendingSales.map(s => (
                                                 <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                                                     <td className="px-3 py-4 font-medium text-gray-500">{formatDate(s.sale_date)}</td>
+                                                    <td className="px-3 py-4 font-bold text-amber-500">{formatDate(s.due_date)}</td>
                                                     <td className="px-3 py-4 font-bold text-gray-700">{products.find(p => p.id === s.product_id)?.name}</td>
                                                     <td className="px-3 py-4 text-right font-bold">{s.quantity}</td>
                                                     <td className="px-3 py-4 text-right font-black text-amber-600">R$ {s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
