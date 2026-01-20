@@ -1025,7 +1025,7 @@ const AdminDashboard: React.FC = () => {
                             <select
                                 value={filterMonth}
                                 onChange={(e) => setFilterMonth(parseInt(e.target.value))}
-                                className="bg-white border rounded-xl px-4 py-2 font-bold text-sm outline-none focus:ring-2 ring-primary/20"
+                                className="bg-white border rounded-xl px-4 py-2 font-bold text-sm outline-none focus:ring-2 ring-primary/20 w-36"
                             >
                                 {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => (
                                     <option key={i} value={i}>{m}</option>
@@ -1034,7 +1034,7 @@ const AdminDashboard: React.FC = () => {
                             <select
                                 value={filterYear}
                                 onChange={(e) => setFilterYear(parseInt(e.target.value))}
-                                className="bg-white border rounded-xl px-4 py-2 font-bold text-sm outline-none focus:ring-2 ring-primary/20"
+                                className="bg-white border rounded-xl px-4 py-2 font-bold text-sm outline-none focus:ring-2 ring-primary/20 w-28"
                             >
                                 {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
                                     <option key={y} value={y}>{y}</option>
