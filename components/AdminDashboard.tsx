@@ -845,13 +845,9 @@ const AdminDashboard: React.FC = () => {
                     });
 
                     const totalRevenue = filteredSales.reduce((acc, s) => acc + s.total_price, 0);
-                    const totalDiscounts = filteredSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
-                    const totalCommissions = filteredSales.reduce((acc, s) => {
-                        if (!s.reseller_id) return acc;
-                        const reseller = resellers.find(r => r.id === s.reseller_id);
-                        return acc + (s.net_amount * ((reseller?.commission_rate || 0) / 100));
-                    }, 0);
-                    const finalNet = filteredSales.reduce((acc, s) => acc + s.net_amount, 0) - totalCommissions;
+                    const totalDiscounts = filteredSales.filter(s => !s.reseller_id).reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+                    const totalCommissions = filteredSales.filter(s => !!s.reseller_id).reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+                    const finalNet = totalRevenue - totalDiscounts - totalCommissions;
 
                     const productRanking = products.map(p => ({
                         ...p,
@@ -1187,7 +1183,7 @@ const AdminDashboard: React.FC = () => {
                                                 <th className="px-4 py-5">Vendedor</th>
                                                 <th className="px-4 py-5 text-center">Quant.</th>
                                                 <th className="px-4 py-5 text-right">Total (Bruto)</th>
-                                                <th className="px-4 py-5 text-right">Desconto (%)</th>
+                                                <th className="px-4 py-5 text-right">Dedução / Com. (%)</th>
                                                 <th className="px-4 py-5 text-right">Líquido</th>
                                                 <th className="px-4 py-5 text-center">Status</th>
                                                 <th className="px-4 py-5 text-center">Ações</th>
@@ -1211,7 +1207,7 @@ const AdminDashboard: React.FC = () => {
                                                     <td className="px-4 py-5 text-right font-medium text-gray-500 text-[10px] whitespace-nowrap">R$ {s.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-5 text-right font-bold text-red-400 text-[10px] whitespace-nowrap">
                                                         - R$ {(s.discount_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                        <span className="block text-[8px] opacity-50">({s.discount_percentage || 0}%)</span>
+                                                        <span className="block text-[8px] opacity-70">({s.discount_percentage || 0}%) {s.reseller_id ? 'Comissão' : 'Desconto'}</span>
                                                     </td>
                                                     <td className="px-4 py-5 text-right font-black text-primary text-sm whitespace-nowrap">R$ {(s.net_amount || s.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-5 text-center text-xs">
@@ -1991,7 +1987,7 @@ const AdminDashboard: React.FC = () => {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Desconto (%)</label>
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">{saleForm.reseller_id ? 'Comissão (%)' : 'Desconto (%)'}</label>
                                             <input
                                                 type="number"
                                                 step="0.1"
@@ -2019,7 +2015,7 @@ const AdminDashboard: React.FC = () => {
                                         <span className="font-black text-gray-800">R$ {saleForm.total_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-red-500">
-                                        <span className="font-bold">Desconto ({saleForm.discount_percentage}%):</span>
+                                        <span className="font-bold">{saleForm.reseller_id ? 'Comissão' : 'Desconto'} ({saleForm.discount_percentage}%):</span>
                                         <span className="font-black">- R$ {saleForm.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                     <div className="flex justify-between items-center pt-4 border-t border-primary/20">
