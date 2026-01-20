@@ -787,8 +787,8 @@ const AdminDashboard: React.FC = () => {
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Parceiro: ${reseller.name}`, 14, 28);
-        doc.text(`Data: ${date}`, 14, 33);
+        doc.text(`Parceiro: ${reseller.name}`, 40, 28);
+        doc.text(`Data: ${date}`, 40, 33);
 
         // Summary Cards
         doc.setDrawColor(229, 231, 235);
@@ -854,7 +854,7 @@ const AdminDashboard: React.FC = () => {
         const monthName = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][month];
 
         // Header Style
-        doc.setFillColor(30, 64, 175);
+        doc.setFillColor(243, 244, 246);
         doc.rect(0, 0, 210, 40, 'F');
 
         // Logo/Title
@@ -864,10 +864,15 @@ const AdminDashboard: React.FC = () => {
             console.error('Error adding logo to PDF', e);
         }
 
-        doc.setTextColor(255, 255, 255);
+        doc.setTextColor(31, 41, 55);
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
         doc.text(`Resumo Mensal - ${monthName} / ${year}`, 40, 25);
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Relatório Gerencial`, 40, 31);
+        doc.text(`Data: ${date}`, 40, 36);
 
         // KPI Section
         doc.setTextColor(31, 41, 55);
@@ -885,7 +890,7 @@ const AdminDashboard: React.FC = () => {
                 ['Faturamento Líquido', `R$ ${net.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`],
             ],
             theme: 'striped',
-            headStyles: { fillColor: [71, 85, 105] },
+            headStyles: { fillColor: [30, 64, 175] },
             columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } }
         });
 
@@ -899,7 +904,7 @@ const AdminDashboard: React.FC = () => {
             head: [['Pos', 'Produto', 'Qtd Vendida', 'Receita Líquida']],
             body: ranking.map((p, i) => [i + 1, p.name, p.sold, `R$ ${p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`]),
             theme: 'grid',
-            headStyles: { fillColor: [5, 150, 105] },
+            headStyles: { fillColor: [30, 64, 175] },
             columnStyles: {
                 0: { halign: 'center' },
                 2: { halign: 'center' },
