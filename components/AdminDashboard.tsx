@@ -205,6 +205,9 @@ const AdminDashboard: React.FC = () => {
         search: ''
     });
 
+    const [hoveredProduct, setHoveredProduct] = useState<any>(null);
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
     const askConfirmation = (title: string, message: string, onConfirm: () => void) => {
         setConfirmModal({ isOpen: true, title, message, onConfirm });
     };
@@ -1248,7 +1251,7 @@ const AdminDashboard: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6">
+                                    <div className="space-y-6 relative">
                                         {productRanking.length === 0 ? (
                                             <div className="text-center py-20 text-gray-400 font-bold border-2 border-dashed rounded-[40px] bg-gray-50/50">
                                                 <span className="material-symbols-outlined text-4xl mb-3 block opacity-20">inventory_2</span>
@@ -1269,25 +1272,47 @@ const AdminDashboard: React.FC = () => {
                                                                 {p.sold} unidades
                                                             </p>
                                                         </div>
-                                                        <div className="flex-1 h-10 bg-gray-50 rounded-xl overflow-hidden relative border border-gray-100/50 group-hover:border-primary/20 transition-all">
+                                                        <div
+                                                            className="flex-1 h-10 bg-gray-50 rounded-xl overflow-hidden relative border border-gray-100/50 group-hover:border-primary/20 transition-all cursor-crosshair"
+                                                            onMouseEnter={() => setHoveredProduct(p)}
+                                                            onMouseLeave={() => setHoveredProduct(null)}
+                                                            onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY })}
+                                                        >
                                                             <div
                                                                 className="h-full bg-primary rounded-r-xl transition-all duration-1000 ease-out relative group-hover:brightness-110 shadow-lg shadow-primary/10"
                                                                 style={{
                                                                     width: `${percentage}%`,
-                                                                    background: `linear-gradient(90deg, var(--color-primary-light, #7c3aed), #4f46e5)`
+                                                                    background: `linear-gradient(90deg, #7c3aed, #4f46e5)`
                                                                 }}
                                                             >
                                                                 <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-50"></div>
-                                                            </div>
-                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
-                                                                <span className="text-[10px] font-black text-gray-800 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-lg border shadow-sm">
-                                                                    R$ {p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                                                </span>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 );
                                             })
+                                        )}
+
+                                        {/* Floating Tooltip */}
+                                        {hoveredProduct && (
+                                            <div
+                                                className="fixed z-[100] pointer-events-none transform -translate-x-1/2 -translate-y-[110%] transition-opacity"
+                                                style={{
+                                                    left: mousePos.x,
+                                                    top: mousePos.y
+                                                }}
+                                            >
+                                                <div className="bg-[#1a1f2e] border border-white/10 p-4 rounded-2xl shadow-2xl backdrop-blur-md min-w-[220px]">
+                                                    <p className="text-white font-black text-xs uppercase leading-tight mb-2">
+                                                        {hoveredProduct.name}
+                                                    </p>
+                                                    <div className="h-px bg-white/10 w-full mb-2"></div>
+                                                    <p className="text-primary-light font-bold text-[10px] uppercase flex items-center justify-between">
+                                                        <span>Total Vendido:</span>
+                                                        <span className="text-white">R$ {hoveredProduct.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
