@@ -1711,7 +1711,7 @@ const AdminDashboard: React.FC = () => {
                                             {/* Header Metrics */}
                                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                                                 {/* Visual Card */}
-                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-6 text-white relative shadow-2xl overflow-hidden aspect-[1.45/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
+                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 text-white relative shadow-2xl overflow-hidden aspect-[1.35/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
                                                     <div className="absolute -top-12 -right-12 h-48 w-48 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-all" />
                                                     <div className="absolute -bottom-8 -left-8 h-32 w-32 bg-black/10 rounded-full blur-2xl" />
 
@@ -1722,21 +1722,21 @@ const AdminDashboard: React.FC = () => {
                                                                 <span className="material-symbols-outlined text-xs">contactless</span>
                                                                 <p className="text-[10px] font-bold tracking-widest uppercase">NÚMERO DO CARTÃO</p>
                                                             </div>
-                                                            <p className="font-bold tracking-[0.25em] text-xl mt-4 drop-shadow-md">•••• •••• •••• {card.last_4_digits || '0000'}</p>
+                                                            <p className="font-bold tracking-[0.25em] text-xl mt-4 drop-shadow-lg">•••• •••• •••• {card.last_4_digits || '0000'}</p>
                                                         </div>
                                                         <button onClick={(e) => { e.stopPropagation(); setCardForm(card); setIsCardModalOpen(true); }} className="h-10 w-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-white/40">
                                                             <span className="material-symbols-outlined text-sm text-white">edit</span>
                                                         </button>
                                                     </div>
 
-                                                    <div className="flex justify-between items-end relative z-10">
+                                                    <div className="flex justify-between items-end relative z-10 pt-4">
                                                         <div>
-                                                            <p className="text-[8px] uppercase font-black opacity-50 mb-0.5">Bandeira</p>
-                                                            <p className="font-black text-base uppercase tracking-wider">{card.brand || 'NUTRA'}</p>
+                                                            <p className="text-[9px] uppercase font-black opacity-50 mb-0.5">Bandeira</p>
+                                                            <p className="font-black text-sm uppercase tracking-wider">{card.brand || 'NUTRA'}</p>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className="text-[8px] uppercase font-black opacity-50 mb-0.5">Fechamento / Vencimento</p>
-                                                            <p className="font-black text-base uppercase">DIA {card.closing_day} / {card.due_day}</p>
+                                                            <p className="text-[9px] uppercase font-black opacity-50 mb-0.5">Fechamento / Vencimento</p>
+                                                            <p className="font-black text-sm uppercase">DIA {card.closing_day} / {card.due_day}</p>
                                                         </div>
                                                     </div>
                                                 </div>
