@@ -1711,7 +1711,7 @@ const AdminDashboard: React.FC = () => {
                                             {/* Header Metrics */}
                                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                                                 {/* Visual Card */}
-                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 text-white relative shadow-2xl overflow-hidden aspect-[1.35/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
+                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 pb-10 text-white relative shadow-2xl overflow-hidden aspect-[1.15/1] xl:aspect-[1.3/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
                                                     <div className="absolute -top-12 -right-12 h-48 w-48 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-all" />
                                                     <div className="absolute -bottom-8 -left-8 h-32 w-32 bg-black/10 rounded-full blur-2xl" />
 
@@ -1729,14 +1729,14 @@ const AdminDashboard: React.FC = () => {
                                                         </button>
                                                     </div>
 
-                                                    <div className="flex justify-between items-end relative z-10 pt-4">
+                                                    <div className="flex justify-between items-end relative z-10 mt-6 bottom-2">
                                                         <div>
-                                                            <p className="text-[9px] uppercase font-black opacity-50 mb-0.5">Bandeira</p>
-                                                            <p className="font-black text-sm uppercase tracking-wider">{card.brand || 'NUTRA'}</p>
+                                                            <p className="text-[10px] uppercase font-black opacity-50 mb-1">Bandeira</p>
+                                                            <p className="font-black text-base uppercase tracking-wider whitespace-nowrap">{card.brand || 'NUTRA'}</p>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className="text-[9px] uppercase font-black opacity-50 mb-0.5">Fechamento / Vencimento</p>
-                                                            <p className="font-black text-sm uppercase">DIA {card.closing_day} / {card.due_day}</p>
+                                                            <p className="text-[10px] uppercase font-black opacity-50 mb-1">Fec / Ven</p>
+                                                            <p className="font-black text-base uppercase whitespace-nowrap">DIA {card.closing_day} / {card.due_day}</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1752,7 +1752,7 @@ const AdminDashboard: React.FC = () => {
                                                         </div>
                                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Limite Total</p>
                                                     </div>
-                                                    <p className="text-3xl font-black text-gray-800 mb-6 relative z-10">R$ {card.limit_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                    <p className="text-2xl font-black text-gray-800 mb-6 relative z-10 whitespace-nowrap">R$ {card.limit_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                     <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden relative z-10">
                                                         <div className="bg-blue-500 h-full transition-all duration-1000 ease-out shadow-sm" style={{ width: `${spentPercent}%` }} />
                                                     </div>
@@ -1771,7 +1771,7 @@ const AdminDashboard: React.FC = () => {
                                                         </div>
                                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Limite Disponível</p>
                                                     </div>
-                                                    <p className="text-3xl font-black text-gray-800 mb-6 relative z-10">R$ {available.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                    <p className="text-2xl font-black text-gray-800 mb-6 relative z-10 whitespace-nowrap">R$ {available.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                     <div className="flex items-center gap-2 relative z-10">
                                                         <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
                                                         <p className="text-[10px] text-green-500 font-black uppercase tracking-tight">LIBERADO PARA COMPRAS</p>
