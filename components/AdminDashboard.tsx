@@ -1711,7 +1711,7 @@ const AdminDashboard: React.FC = () => {
                                             {/* Header Metrics */}
                                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                                                 {/* Visual Card */}
-                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 text-white relative shadow-2xl overflow-hidden aspect-[1.6/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
+                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-7 text-white relative shadow-2xl overflow-hidden aspect-[1.58/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
                                                     <div className="absolute -top-12 -right-12 h-48 w-48 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-all" />
                                                     <div className="absolute -bottom-8 -left-8 h-32 w-32 bg-black/10 rounded-full blur-2xl" />
 
@@ -1821,8 +1821,8 @@ const AdminDashboard: React.FC = () => {
                                                         <table className="w-full">
                                                             <thead className="bg-gray-50/50 text-[9px] text-gray-400 font-black uppercase tracking-widest border-b">
                                                                 <tr>
-                                                                    <th className="px-8 py-5 text-left">Data</th>
-                                                                    <th className="px-8 py-5 text-left">Descrição / Categoria</th>
+                                                                    <th className="px-8 py-5 text-left whitespace-nowrap">Data</th>
+                                                                    <th className="px-8 py-5 text-left whitespace-nowrap">Descrição / Categoria</th>
                                                                     <th className="px-8 py-5 text-right whitespace-nowrap">Valor Lançado</th>
                                                                 </tr>
                                                             </thead>
@@ -1836,12 +1836,12 @@ const AdminDashboard: React.FC = () => {
                                                                     </tr>
                                                                 ) : invoiceEntries.map(entry => (
                                                                     <tr key={entry.id} className="hover:bg-gray-50/30 transition-colors group">
-                                                                        <td className="px-8 py-5 text-[10px] text-gray-400 font-bold font-mono uppercase">{formatDate(entry.due_date)}</td>
-                                                                        <td className="px-8 py-5">
-                                                                            <p className="font-black text-gray-700 text-xs mb-0.5">{entry.description}</p>
+                                                                        <td className="px-8 py-5 text-[10px] text-gray-400 font-bold font-mono uppercase whitespace-nowrap">{formatDate(entry.due_date)}</td>
+                                                                        <td className="px-8 py-5 whitespace-nowrap">
+                                                                            <p className="font-black text-gray-700 text-xs mb-0.5 truncate max-w-[200px]">{entry.description}</p>
                                                                             <span className="px-2 py-0.5 rounded-lg bg-gray-50 text-gray-400 text-[8px] font-black uppercase">{categories.find(c => c.id === (entry as any).category_id)?.name || entry.category}</span>
                                                                         </td>
-                                                                        <td className="px-8 py-5 text-right">
+                                                                        <td className="px-8 py-5 text-right whitespace-nowrap">
                                                                             <p className="font-black text-gray-800 text-sm">R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                                             {entry.installments_total && entry.installments_total > 1 && (
                                                                                 <span className="text-[8px] text-indigo-400 font-black uppercase">Parcela {entry.installment_number}/{entry.installments_total}</span>
