@@ -1711,7 +1711,7 @@ const AdminDashboard: React.FC = () => {
                                             {/* Header Metrics */}
                                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                                                 {/* Visual Card */}
-                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 text-white relative shadow-2xl overflow-hidden aspect-[1.1/1] xl:aspect-[1.25/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
+                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 text-white relative shadow-2xl overflow-hidden aspect-[1.15/1] xl:aspect-[1.25/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
                                                     <div className="absolute -top-12 -right-12 h-48 w-48 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-all" />
                                                     <div className="absolute -bottom-8 -left-8 h-32 w-32 bg-black/10 rounded-full blur-2xl" />
 
@@ -1742,7 +1742,7 @@ const AdminDashboard: React.FC = () => {
                                                 </div>
 
                                                 {/* Limit Info */}
-                                                <div className="bg-white rounded-[40px] border p-8 flex flex-col justify-center shadow-sm relative overflow-hidden">
+                                                <div className="bg-white rounded-[40px] border p-8 flex flex-col justify-center shadow-sm relative overflow-hidden aspect-[1.15/1] xl:aspect-[1.25/1]">
                                                     <div className="absolute top-0 right-0 p-6 opacity-5">
                                                         <span className="material-symbols-outlined text-8xl">account_balance</span>
                                                     </div>
@@ -1761,7 +1761,7 @@ const AdminDashboard: React.FC = () => {
                                                     </p>
                                                 </div>
 
-                                                <div className="bg-white rounded-[40px] border p-8 flex flex-col justify-center shadow-sm relative overflow-hidden">
+                                                <div className="bg-white rounded-[40px] border p-8 flex flex-col justify-center shadow-sm relative overflow-hidden aspect-[1.15/1] xl:aspect-[1.25/1]">
                                                     <div className="absolute top-0 right-0 p-6 opacity-5">
                                                         <span className="material-symbols-outlined text-8xl text-green-500">check_circle</span>
                                                     </div>
