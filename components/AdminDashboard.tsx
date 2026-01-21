@@ -1237,42 +1237,57 @@ const AdminDashboard: React.FC = () => {
 
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <div className="lg:col-span-2 space-y-8">
-                                <div className="bg-white p-8 rounded-3xl border shadow-sm">
-                                    <h3 className="text-lg font-bold mb-6 flex items-center justify-between">
-                                        <div className="flex items-center">
-                                            <span className="material-symbols-outlined mr-2 text-primary">analytics</span>
-                                            Ranking de Produtos Mais Vendidos
+                                <div className="bg-white p-8 rounded-[40px] border shadow-sm">
+                                    <div className="flex justify-between items-center mb-8">
+                                        <div className="flex flex-col">
+                                            <h3 className="text-md font-black text-gray-400 uppercase tracking-widest text-[10px]">Top 10 Produtos</h3>
+                                            <h2 className="text-xl font-black text-gray-800">Mais Vendidos</h2>
                                         </div>
-                                        <span className="text-xs text-gray-400 font-medium">{filteredSales.length} vendas no período</span>
-                                    </h3>
-                                    <div className="space-y-4">
+                                        <div className="bg-primary/5 px-4 py-2 rounded-2xl">
+                                            <span className="text-[10px] font-black text-primary uppercase tracking-widest">{filteredSales.length} vendas no total</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-6">
                                         {productRanking.length === 0 ? (
-                                            <div className="text-center py-10 text-gray-400 font-bold border-2 border-dashed rounded-3xl">
+                                            <div className="text-center py-20 text-gray-400 font-bold border-2 border-dashed rounded-[40px] bg-gray-50/50">
+                                                <span className="material-symbols-outlined text-4xl mb-3 block opacity-20">inventory_2</span>
                                                 Nenhuma venda registrada neste período.
                                             </div>
                                         ) : (
-                                            productRanking.map((p, idx) => (
-                                                <div key={p.id} className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-2xl transition-colors group">
-                                                    <div className="flex items-center space-x-4">
-                                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center font-black text-xs ${idx === 0 ? 'bg-amber-100 text-amber-600' : idx === 1 ? 'bg-gray-100 text-gray-600' : idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'}`}>
-                                                            {idx + 1}
+                                            productRanking.slice(0, 10).map((p, idx) => {
+                                                const maxSold = productRanking[0]?.sold || 1;
+                                                const percentage = (p.sold / maxSold) * 100;
+
+                                                return (
+                                                    <div key={p.id} className="group flex items-center gap-4">
+                                                        <div className="w-32 text-right shrink-0">
+                                                            <p className="text-[10px] font-black text-gray-800 uppercase leading-tight truncate" title={p.name}>
+                                                                {p.name}
+                                                            </p>
+                                                            <p className="text-[9px] font-bold text-gray-400 uppercase">
+                                                                {p.sold} unidades
+                                                            </p>
                                                         </div>
-                                                        <div>
-                                                            <p className="font-bold text-gray-800">{p.name}</p>
-                                                            <p className="text-[10px] text-gray-400 uppercase font-black">{p.sold} unidades vendidas</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-sm font-black text-gray-800">R$ {p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                                        <div className="w-32 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                                                        <div className="flex-1 h-10 bg-gray-50 rounded-xl overflow-hidden relative border border-gray-100/50 group-hover:border-primary/20 transition-all">
                                                             <div
-                                                                className="h-full bg-primary"
-                                                                style={{ width: `${(p.sold / productRanking[0].sold) * 100}%` }}
-                                                            ></div>
+                                                                className="h-full bg-primary rounded-r-xl transition-all duration-1000 ease-out relative group-hover:brightness-110 shadow-lg shadow-primary/10"
+                                                                style={{
+                                                                    width: `${percentage}%`,
+                                                                    background: `linear-gradient(90deg, var(--color-primary-light, #7c3aed), #4f46e5)`
+                                                                }}
+                                                            >
+                                                                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-50"></div>
+                                                            </div>
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+                                                                <span className="text-[10px] font-black text-gray-800 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-lg border shadow-sm">
+                                                                    R$ {p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                );
+                                            })
                                         )}
                                     </div>
                                 </div>
