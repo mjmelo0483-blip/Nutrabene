@@ -742,6 +742,12 @@ const AdminDashboard: React.FC = () => {
     }
 
     const getCashFlowMetrics = () => {
+        const periodStart = new Date(cfBaseDate);
+        periodStart.setHours(0, 0, 0, 0);
+        if (cashFlowMode === 'monthly') {
+            periodStart.setDate(1);
+        }
+
         const filteredEntries = financialEntries.filter(e => {
             const date = new Date(e.due_date);
             if (cashFlowMode === 'daily') {
@@ -780,10 +786,15 @@ const AdminDashboard: React.FC = () => {
         const totalIncome = filteredEntries.filter(e => e.type === 'receivable').reduce((acc, e) => acc + e.amount, 0);
         const totalExpense = filteredEntries.filter(e => e.type === 'payable').reduce((acc, e) => acc + e.amount, 0);
 
-        // Initial Balance calculation (simplified: total bank balance - current period activity)
-        // For a true "Fluxo de Caixa", we'd need a starting balance from a previous point.
-        // Let's use current bank balances as total available.
         const currentBankTotal = bankAccounts.reduce((acc, b) => acc + b.balance, 0);
+
+        // Cumulative Balance Logic:
+        // Initial Balance (Period Start) = Current Balance - Net Paid Impact (from Period Start to Now/Infinity)
+        const netPaidFromPeriodStart = financialEntries
+            .filter(e => e.status === 'paid' && new Date(e.due_date) >= periodStart)
+            .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
+
+        const initialBalance = currentBankTotal - netPaidFromPeriodStart;
 
         return {
             filteredEntries,
@@ -791,7 +802,7 @@ const AdminDashboard: React.FC = () => {
             expenseGroups,
             totalIncome,
             totalExpense,
-            currentBankTotal
+            initialBalance
         };
     };
 
@@ -1579,8 +1590,8 @@ const AdminDashboard: React.FC = () => {
                 )}
                 {/* Finance Tab */}
                 {activeTab === 'finances' && (() => {
-                    const { incomeGroups, expenseGroups, totalIncome, totalExpense, currentBankTotal } = getCashFlowMetrics();
-                    const projectedBalance = currentBankTotal + totalIncome - totalExpense;
+                    const { incomeGroups, expenseGroups, totalIncome, totalExpense, initialBalance } = getCashFlowMetrics();
+                    const projectedBalance = initialBalance + totalIncome - totalExpense;
 
                     const toggleGroup = (id: string) => {
                         const newSet = new Set(expandedCFGroups);
@@ -1644,7 +1655,7 @@ const AdminDashboard: React.FC = () => {
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saldo Inicial</p>
                                         <span className="material-symbols-outlined text-gray-200 group-hover:text-gray-400 transition-colors">account_balance_wallet</span>
                                     </div>
-                                    <p className="text-xl font-black text-gray-800">R$ {currentBankTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-xl font-black text-gray-800">R$ {initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                 </div>
                                 <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                     <div className="flex justify-between items-center mb-4">
