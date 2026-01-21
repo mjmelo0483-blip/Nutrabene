@@ -1711,7 +1711,7 @@ const AdminDashboard: React.FC = () => {
                                             {/* Header Metrics */}
                                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                                                 {/* Visual Card */}
-                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-7 text-white relative shadow-2xl overflow-hidden aspect-[1.58/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
+                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-6 text-white relative shadow-2xl overflow-hidden aspect-[1.45/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
                                                     <div className="absolute -top-12 -right-12 h-48 w-48 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-all" />
                                                     <div className="absolute -bottom-8 -left-8 h-32 w-32 bg-black/10 rounded-full blur-2xl" />
 
@@ -1812,8 +1812,8 @@ const AdminDashboard: React.FC = () => {
                                                             </button>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">TOTAL DA FATURA</p>
-                                                            <p className="text-3xl font-black text-gray-800">R$ {invoiceTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                            <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1 whitespace-nowrap">TOTAL DA FATURA</p>
+                                                            <p className="text-3xl font-black text-gray-800 whitespace-nowrap">R$ {invoiceTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                         </div>
                                                     </div>
 
