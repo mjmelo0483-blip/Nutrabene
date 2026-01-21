@@ -1711,7 +1711,7 @@ const AdminDashboard: React.FC = () => {
                                             {/* Header Metrics */}
                                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                                                 {/* Visual Card */}
-                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 pb-10 text-white relative shadow-2xl overflow-hidden aspect-[1.15/1] xl:aspect-[1.3/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
+                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 text-white relative shadow-2xl overflow-hidden aspect-[1.1/1] xl:aspect-[1.25/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
                                                     <div className="absolute -top-12 -right-12 h-48 w-48 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-all" />
                                                     <div className="absolute -bottom-8 -left-8 h-32 w-32 bg-black/10 rounded-full blur-2xl" />
 
@@ -1719,24 +1719,24 @@ const AdminDashboard: React.FC = () => {
                                                         <div>
                                                             <h3 className="font-black text-xl tracking-tight leading-none mb-1">{card.name}</h3>
                                                             <div className="flex items-center gap-2 opacity-60">
-                                                                <span className="material-symbols-outlined text-xs">contactless</span>
-                                                                <p className="text-[10px] font-bold tracking-widest uppercase">NÚMERO DO CARTÃO</p>
+                                                                <span className="material-symbols-outlined text-[10px]">contactless</span>
+                                                                <p className="text-[9px] font-bold tracking-widest uppercase">NÚMERO DO CARTÃO</p>
                                                             </div>
-                                                            <p className="font-bold tracking-[0.25em] text-xl mt-4 drop-shadow-lg">•••• •••• •••• {card.last_4_digits || '0000'}</p>
+                                                            <p className="font-bold tracking-[0.25em] text-lg mt-4 drop-shadow-lg">•••• •••• •••• {card.last_4_digits || '0000'}</p>
                                                         </div>
                                                         <button onClick={(e) => { e.stopPropagation(); setCardForm(card); setIsCardModalOpen(true); }} className="h-10 w-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-white/40">
                                                             <span className="material-symbols-outlined text-sm text-white">edit</span>
                                                         </button>
                                                     </div>
 
-                                                    <div className="flex justify-between items-end relative z-10 mt-6 bottom-2">
-                                                        <div>
-                                                            <p className="text-[10px] uppercase font-black opacity-50 mb-1">Bandeira</p>
-                                                            <p className="font-black text-base uppercase tracking-wider whitespace-nowrap">{card.brand || 'NUTRA'}</p>
+                                                    <div className="flex justify-between items-end relative z-10 mt-auto pb-2">
+                                                        <div className="min-w-0">
+                                                            <p className="text-[9px] uppercase font-black opacity-40 mb-1">Bandeira</p>
+                                                            <p className="font-black text-xs uppercase tracking-widest whitespace-nowrap truncate">{card.brand || 'NUTRA'}</p>
                                                         </div>
-                                                        <div className="text-right">
-                                                            <p className="text-[10px] uppercase font-black opacity-50 mb-1">Fec / Ven</p>
-                                                            <p className="font-black text-base uppercase whitespace-nowrap">DIA {card.closing_day} / {card.due_day}</p>
+                                                        <div className="text-right flex-shrink-0 ml-4">
+                                                            <p className="text-[9px] uppercase font-black opacity-40 mb-1">Fechamento / Vencimento</p>
+                                                            <p className="font-black text-xs uppercase whitespace-nowrap">DIA {card.closing_day} / {card.due_day}</p>
                                                         </div>
                                                     </div>
                                                 </div>
