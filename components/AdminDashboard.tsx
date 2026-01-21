@@ -85,6 +85,7 @@ interface FinancialCategory {
     id: string;
     name: string;
     type: 'income' | 'expense';
+    parent_id?: string;
 }
 
 interface CreditCard {
@@ -1572,7 +1573,14 @@ const AdminDashboard: React.FC = () => {
                                                 <td className="px-4 py-5">
                                                     <div className="font-black text-gray-800 text-xs">{entry.description}</div>
                                                     <div className="text-[9px] text-gray-400 uppercase font-bold tracking-tighter">
-                                                        {categories.find(c => c.id === (entry as any).category_id)?.name || entry.category}
+                                                        {(() => {
+                                                            const cat = categories.find(c => c.id === (entry as any).category_id);
+                                                            if (cat?.parent_id) {
+                                                                const parent = categories.find(p => p.id === cat.parent_id);
+                                                                return parent ? `${parent.name} > ${cat.name}` : cat.name;
+                                                            }
+                                                            return cat?.name || entry.category;
+                                                        })()}
                                                     </div>
                                                 </td>
                                                 <td className={`px-4 py-5 text-right font-black text-xs whitespace-nowrap ${entry.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
@@ -1933,12 +1941,26 @@ const AdminDashboard: React.FC = () => {
                                 <h3 className="text-xs font-black text-green-500 uppercase tracking-widest ml-4">Receitas</h3>
                                 <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
                                     <div className="divide-y">
-                                        {categories.filter(c => c.type === 'income').map(cat => (
-                                            <div key={cat.id} className="p-5 flex justify-between items-center hover:bg-gray-50 transition-colors">
-                                                <span className="font-bold text-gray-700">{cat.name}</span>
-                                                <button onClick={() => { setCategoryForm(cat); setIsCategoryModalOpen(true); }} className="text-gray-300 hover:text-blue-500 transition-colors">
-                                                    <span className="material-symbols-outlined text-sm">edit</span>
-                                                </button>
+                                        {categories.filter(c => c.type === 'income' && !c.parent_id).map(cat => (
+                                            <div key={cat.id}>
+                                                <div className="p-5 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                                                    <span className="font-bold text-gray-700">{cat.name}</span>
+                                                    <button onClick={() => { setCategoryForm(cat); setIsCategoryModalOpen(true); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                        <span className="material-symbols-outlined text-sm">edit</span>
+                                                    </button>
+                                                </div>
+                                                {/* Subcategories */}
+                                                {categories.filter(sub => sub.parent_id === cat.id).map(sub => (
+                                                    <div key={sub.id} className="p-4 pl-12 flex justify-between items-center bg-gray-50/50 hover:bg-gray-100 transition-colors border-t border-gray-100/50">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="material-symbols-outlined text-xs text-gray-300">subdirectory_arrow_right</span>
+                                                            <span className="text-gray-600 font-medium text-sm">{sub.name}</span>
+                                                        </div>
+                                                        <button onClick={() => { setCategoryForm(sub); setIsCategoryModalOpen(true); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                            <span className="material-symbols-outlined text-[10px]">edit</span>
+                                                        </button>
+                                                    </div>
+                                                ))}
                                             </div>
                                         ))}
                                     </div>
@@ -1948,12 +1970,26 @@ const AdminDashboard: React.FC = () => {
                                 <h3 className="text-xs font-black text-red-500 uppercase tracking-widest ml-4">Despesas</h3>
                                 <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
                                     <div className="divide-y">
-                                        {categories.filter(c => c.type === 'expense').map(cat => (
-                                            <div key={cat.id} className="p-5 flex justify-between items-center hover:bg-gray-50 transition-colors">
-                                                <span className="font-bold text-gray-700">{cat.name}</span>
-                                                <button onClick={() => { setCategoryForm(cat); setIsCategoryModalOpen(true); }} className="text-gray-300 hover:text-blue-500 transition-colors">
-                                                    <span className="material-symbols-outlined text-sm">edit</span>
-                                                </button>
+                                        {categories.filter(c => c.type === 'expense' && !c.parent_id).map(cat => (
+                                            <div key={cat.id}>
+                                                <div className="p-5 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                                                    <span className="font-bold text-gray-700">{cat.name}</span>
+                                                    <button onClick={() => { setCategoryForm(cat); setIsCategoryModalOpen(true); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                        <span className="material-symbols-outlined text-sm">edit</span>
+                                                    </button>
+                                                </div>
+                                                {/* Subcategories */}
+                                                {categories.filter(sub => sub.parent_id === cat.id).map(sub => (
+                                                    <div key={sub.id} className="p-4 pl-12 flex justify-between items-center bg-gray-50/50 hover:bg-gray-100 transition-colors border-t border-gray-100/50">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="material-symbols-outlined text-xs text-gray-300">subdirectory_arrow_right</span>
+                                                            <span className="text-gray-600 font-medium text-sm">{sub.name}</span>
+                                                        </div>
+                                                        <button onClick={() => { setCategoryForm(sub); setIsCategoryModalOpen(true); }} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                            <span className="material-symbols-outlined text-[10px]">edit</span>
+                                                        </button>
+                                                    </div>
+                                                ))}
                                             </div>
                                         ))}
                                     </div>
@@ -2178,11 +2214,29 @@ const AdminDashboard: React.FC = () => {
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Categoria</label>
-                                <select value={(financialForm as any).category_id || ''} onChange={e => setFinancialForm({ ...financialForm, category_id: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer">
+                                <select
+                                    value={(financialForm as any).category_id || ''}
+                                    onChange={e => setFinancialForm({ ...financialForm, category_id: e.target.value })}
+                                    className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                >
                                     <option value="">Selecione a Categoria</option>
                                     {categories
                                         .filter(c => (financialForm.type === 'receivable' ? c.type === 'income' : c.type === 'expense'))
-                                        .map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                                        .filter(c => !c.parent_id) // Get parents first
+                                        .map(parent => (
+                                            <React.Fragment key={parent.id}>
+                                                <option value={parent.id} className="font-bold">{parent.name}</option>
+                                                {categories
+                                                    .filter(sub => sub.parent_id === parent.id)
+                                                    .map(sub => (
+                                                        <option key={sub.id} value={sub.id}>
+                                                            &nbsp;&nbsp;&nbsp;&nbsp;↳ {sub.name}
+                                                        </option>
+                                                    ))
+                                                }
+                                            </React.Fragment>
+                                        ))
+                                    }
                                 </select>
                             </div>
                             <div className="flex space-x-6 pt-6">
@@ -2371,9 +2425,27 @@ const AdminDashboard: React.FC = () => {
                         <form onSubmit={handleSaveCategory} className="space-y-6">
                             <input type="text" value={categoryForm.name || ''} onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })} placeholder="Nome da Categoria" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
                             <div className="grid grid-cols-2 gap-4">
-                                <button type="button" onClick={() => setCategoryForm({ ...categoryForm, type: 'income' })} className={`py-4 rounded-2xl font-black transition-all ${categoryForm.type === 'income' ? 'bg-green-500 text-white' : 'bg-gray-50 text-gray-400'}`}>RECEITA</button>
-                                <button type="button" onClick={() => setCategoryForm({ ...categoryForm, type: 'expense' })} className={`py-4 rounded-2xl font-black transition-all ${categoryForm.type === 'expense' ? 'bg-red-500 text-white' : 'bg-gray-50 text-gray-400'}`}>DESPESA</button>
+                                <button type="button" onClick={() => setCategoryForm({ ...categoryForm, type: 'income', parent_id: undefined })} className={`py-4 rounded-2xl font-black transition-all ${categoryForm.type === 'income' ? 'bg-green-500 text-white' : 'bg-gray-50 text-gray-400'}`}>RECEITA</button>
+                                <button type="button" onClick={() => setCategoryForm({ ...categoryForm, type: 'expense', parent_id: undefined })} className={`py-4 rounded-2xl font-black transition-all ${categoryForm.type === 'expense' ? 'bg-red-500 text-white' : 'bg-gray-50 text-gray-400'}`}>DESPESA</button>
                             </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Categoria Pai (Opcional)</label>
+                                <select
+                                    value={categoryForm.parent_id || ''}
+                                    onChange={e => setCategoryForm({ ...categoryForm, parent_id: e.target.value || undefined })}
+                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none appearance-none cursor-pointer"
+                                >
+                                    <option value="">Nenhuma (Esta é uma Categoria Pai)</option>
+                                    {categories
+                                        .filter(c => c.type === categoryForm.type && !c.parent_id && c.id !== categoryForm.id)
+                                        .map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))
+                                    }
+                                </select>
+                            </div>
+
                             <button type="submit" className="w-full bg-primary text-white py-5 rounded-[20px] font-black shadow-xl">Salvar Categoria</button>
                         </form>
                     </div>
