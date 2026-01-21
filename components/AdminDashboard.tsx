@@ -189,6 +189,10 @@ const AdminDashboard: React.FC = () => {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
     const [invoiceDate, setInvoiceDate] = useState<Date>(new Date());
 
+    const [cashFlowMode, setCashFlowMode] = useState<'daily' | 'monthly'>('daily');
+    const [cfBaseDate, setCfBaseDate] = useState<Date>(new Date());
+    const [expandedCFGroups, setExpandedCFGroups] = useState<Set<string>>(new Set());
+
     const askConfirmation = (title: string, message: string, onConfirm: () => void) => {
         setConfirmModal({ isOpen: true, title, message, onConfirm });
     };
@@ -736,6 +740,60 @@ const AdminDashboard: React.FC = () => {
             fetchData();
         }
     }
+
+    const getCashFlowMetrics = () => {
+        const filteredEntries = financialEntries.filter(e => {
+            const date = new Date(e.due_date);
+            if (cashFlowMode === 'daily') {
+                return date.getDate() === cfBaseDate.getDate() &&
+                    date.getMonth() === cfBaseDate.getMonth() &&
+                    date.getFullYear() === cfBaseDate.getFullYear();
+            } else {
+                return date.getMonth() === cfBaseDate.getMonth() &&
+                    date.getFullYear() === cfBaseDate.getFullYear();
+            }
+        });
+
+        const entriesByGroup = filteredEntries.reduce((acc: any, e) => {
+            const catId = (e as any).category_id;
+            const category = categories.find(c => c.id === catId);
+            const groupKey = catId || 'unassigned';
+            if (!acc[groupKey]) {
+                acc[groupKey] = {
+                    id: groupKey,
+                    name: category?.name || 'Sem Categoria',
+                    type: category?.type || (e.type === 'receivable' ? 'income' : 'expense'),
+                    total: 0,
+                    count: 0,
+                    entries: []
+                };
+            }
+            acc[groupKey].total += e.amount;
+            acc[groupKey].count += 1;
+            acc[groupKey].entries.push(e);
+            return acc;
+        }, {});
+
+        const incomeGroups = Object.values(entriesByGroup).filter((g: any) => g.type === 'income');
+        const expenseGroups = Object.values(entriesByGroup).filter((g: any) => g.type === 'expense');
+
+        const totalIncome = filteredEntries.filter(e => e.type === 'receivable').reduce((acc, e) => acc + e.amount, 0);
+        const totalExpense = filteredEntries.filter(e => e.type === 'payable').reduce((acc, e) => acc + e.amount, 0);
+
+        // Initial Balance calculation (simplified: total bank balance - current period activity)
+        // For a true "Fluxo de Caixa", we'd need a starting balance from a previous point.
+        // Let's use current bank balances as total available.
+        const currentBankTotal = bankAccounts.reduce((acc, b) => acc + b.balance, 0);
+
+        return {
+            filteredEntries,
+            incomeGroups,
+            expenseGroups,
+            totalIncome,
+            totalExpense,
+            currentBankTotal
+        };
+    };
 
     const getCardMetrics = (cardId: string, month: number, year: number) => {
         const card = creditCards.find(c => c.id === cardId);
@@ -1520,100 +1578,271 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
                 {/* Finance Tab */}
-                {activeTab === 'finances' && (
-                    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <div className="bg-white px-4 py-6 rounded-3xl border shadow-sm flex flex-col justify-center">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saldo Total Bancos</p>
-                                <p className="text-xl font-black text-indigo-600 whitespace-nowrap">R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            </div>
-                            <div className="bg-white px-4 py-6 rounded-3xl border shadow-sm flex flex-col justify-center">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contas a Receber</p>
-                                <p className="text-xl font-black text-green-600 whitespace-nowrap">R$ {financialEntries.filter(e => e.type === 'receivable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            </div>
-                            <div className="bg-white px-4 py-6 rounded-3xl border shadow-sm flex flex-col justify-center">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Contas a Pagar</p>
-                                <p className="text-xl font-black text-red-500 whitespace-nowrap">R$ {financialEntries.filter(e => e.type === 'payable' && e.status !== 'paid').reduce((acc, e) => acc + e.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    setFinancialForm({
-                                        type: 'payable',
-                                        due_date: new Date().toISOString().split('T')[0],
-                                        entry_date: new Date().toISOString().split('T')[0],
-                                        status: 'pending'
-                                    });
-                                    setIsFinancialModalOpen(true);
-                                }}
-                                className="bg-primary text-white px-4 py-6 rounded-3xl shadow-xl shadow-primary/20 font-black flex items-center justify-center hover:scale-105 transition-all"
-                            >
-                                <span className="material-symbols-outlined mr-2">add_circle</span> Novo Lançamento
-                            </button>
-                        </div>
+                {activeTab === 'finances' && (() => {
+                    const { incomeGroups, expenseGroups, totalIncome, totalExpense, currentBankTotal } = getCashFlowMetrics();
+                    const projectedBalance = currentBankTotal + totalIncome - totalExpense;
 
-                        <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
-                            <div className="p-8 border-b flex justify-between items-center bg-gray-50/50">
-                                <h2 className="text-xl font-bold">Fluxo de Caixa / Movimentações</h2>
+                    const toggleGroup = (id: string) => {
+                        const newSet = new Set(expandedCFGroups);
+                        if (newSet.has(id)) newSet.delete(id);
+                        else newSet.add(id);
+                        setExpandedCFGroups(newSet);
+                    };
+
+                    const adjustDate = (amount: number) => {
+                        const newDate = new Date(cfBaseDate);
+                        if (cashFlowMode === 'daily') newDate.setDate(newDate.getDate() + amount);
+                        else newDate.setMonth(newDate.getMonth() + amount);
+                        setCfBaseDate(newDate);
+                    };
+
+                    return (
+                        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-20">
+                            {/* Header Section */}
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                                <div>
+                                    <h1 className="text-3xl font-black text-gray-800">Fluxo de Caixa</h1>
+                                    <p className="text-sm text-gray-400 font-medium">Controle entradas e saídas por data de <span className="text-primary font-bold">VENCIMENTO</span>.</p>
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-gray-100 p-1 rounded-2xl flex">
+                                        <button
+                                            onClick={() => setCashFlowMode('daily')}
+                                            className={`px-6 py-2.5 rounded-xl text-[10px] font-black tracking-widest transition-all ${cashFlowMode === 'daily' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                        >
+                                            DIÁRIO
+                                        </button>
+                                        <button
+                                            onClick={() => setCashFlowMode('monthly')}
+                                            className={`px-6 py-2.5 rounded-xl text-[10px] font-black tracking-widest transition-all ${cashFlowMode === 'monthly' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                        >
+                                            MENSAL
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center bg-white border rounded-2xl p-1 shadow-sm">
+                                        <button onClick={() => adjustDate(-1)} className="p-2 hover:bg-gray-50 rounded-xl transition-colors"><span className="material-symbols-outlined text-sm">chevron_left</span></button>
+                                        <div className="px-4 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-primary text-sm">calendar_month</span>
+                                            <span className="text-xs font-black text-gray-700 uppercase">
+                                                {cashFlowMode === 'daily'
+                                                    ? cfBaseDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+                                                    : cfBaseDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                                                }
+                                            </span>
+                                        </div>
+                                        <button onClick={() => adjustDate(1)} className="p-2 hover:bg-gray-50 rounded-xl transition-colors"><span className="material-symbols-outlined text-sm">chevron_right</span></button>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-gray-50 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                        <tr>
-                                            <th className="px-4 py-5">Vencimento</th>
-                                            <th className="px-4 py-5">Descrição / Categoria</th>
-                                            <th className="px-4 py-5 text-right">Valor</th>
-                                            <th className="px-4 py-5 text-center">Status</th>
-                                            <th className="px-4 py-5 text-center">Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y text-sm">
-                                        {financialEntries.map(entry => (
-                                            <tr key={entry.id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-4 py-5 font-bold text-gray-400 whitespace-nowrap text-xs">{formatDate(entry.due_date)}</td>
-                                                <td className="px-4 py-5">
-                                                    <div className="font-black text-gray-800 text-xs">{entry.description}</div>
-                                                    <div className="text-[9px] text-gray-400 uppercase font-bold tracking-tighter">
-                                                        {(() => {
-                                                            const cat = categories.find(c => c.id === (entry as any).category_id);
-                                                            if (cat?.parent_id) {
-                                                                const parent = categories.find(p => p.id === cat.parent_id);
-                                                                return parent ? `${parent.name} > ${cat.name}` : cat.name;
-                                                            }
-                                                            return cat?.name || entry.category;
-                                                        })()}
-                                                    </div>
-                                                </td>
-                                                <td className={`px-4 py-5 text-right font-black text-xs whitespace-nowrap ${entry.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
-                                                    {entry.type === 'receivable' ? '+' : '-'} R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </td>
-                                                <td className="px-4 py-5 text-center">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${entry.status === 'paid' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
-                                                        {entry.status === 'paid' ? 'Liquidado' : 'Aguardando'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-5">
-                                                    <div className="flex justify-center space-x-1">
-                                                        {entry.status !== 'paid' && (
-                                                            <button onClick={() => handleMarkAsPaid(entry)} title="Liquidar" className="h-7 w-7 text-green-500 hover:bg-green-50 rounded-lg flex items-center justify-center transition-colors">
-                                                                <span className="material-symbols-outlined text-xs">check_circle</span>
-                                                            </button>
-                                                        )}
-                                                        <button onClick={() => { setFinancialForm(entry); setIsFinancialModalOpen(true); }} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
-                                                            <span className="material-symbols-outlined text-xs">edit</span>
-                                                        </button>
-                                                        <button onClick={() => handleDeleteFinancial(entry.id)} className="h-7 w-7 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
-                                                            <span className="material-symbols-outlined text-xs">delete</span>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+
+                            {/* KPI Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saldo Inicial</p>
+                                        <span className="material-symbols-outlined text-gray-200 group-hover:text-gray-400 transition-colors">account_balance_wallet</span>
+                                    </div>
+                                    <p className="text-xl font-black text-gray-800">R$ {currentBankTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Entradas</p>
+                                        <span className="material-symbols-outlined text-green-100 group-hover:text-green-400 transition-colors">trending_up</span>
+                                    </div>
+                                    <p className="text-xl font-black text-gray-800">R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saídas</p>
+                                        <span className="material-symbols-outlined text-red-100 group-hover:text-red-400 transition-colors">trending_down</span>
+                                    </div>
+                                    <p className="text-xl font-black text-gray-800">- R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimentos</p>
+                                        <span className="material-symbols-outlined text-purple-100 group-hover:text-purple-400 transition-colors">payments</span>
+                                    </div>
+                                    <p className="text-xl font-black text-gray-800">R$ 0,00</p>
+                                </div>
+                                <div className="bg-primary p-6 rounded-[32px] shadow-xl shadow-primary/20 group hover:scale-[1.02] transition-all">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">Saldo Projetado</p>
+                                        <span className="material-symbols-outlined text-white/30 group-hover:text-white/60 transition-colors">calculate</span>
+                                    </div>
+                                    <p className="text-xl font-black text-white">R$ {projectedBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                </div>
                             </div>
+
+                            {/* Actions Bar */}
+                            <div className="flex gap-4">
+                                <div className="relative group">
+                                    <select className="bg-white border-none rounded-2xl px-6 py-4 text-xs font-black text-gray-500 shadow-sm appearance-none pr-12 cursor-pointer focus:ring-4 ring-primary/5 transition-all">
+                                        <option>Todas as Contas</option>
+                                        {bankAccounts.map(b => <option key={b.id}>{b.name}</option>)}
+                                    </select>
+                                    <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none">expand_more</span>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setFinancialForm({
+                                            type: 'payable',
+                                            due_date: cfBaseDate.toISOString().split('T')[0],
+                                            entry_date: new Date().toISOString().split('T')[0],
+                                            status: 'pending'
+                                        });
+                                        setIsFinancialModalOpen(true);
+                                    }}
+                                    className="bg-primary text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center hover:scale-105 active:scale-95 transition-all"
+                                >
+                                    <span className="material-symbols-outlined mr-2">add</span> NOVO LANÇAMENTO
+                                </button>
+                            </div>
+
+                            {/* Fluxo de Entrada Section */}
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-4">
+                                    <span className="px-4 py-1.5 bg-green-500/10 text-green-500 text-[10px] font-black uppercase tracking-widest rounded-full">Fluxo de Entrada</span>
+                                    <div className="h-px bg-gray-100 flex-1"></div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {incomeGroups.length === 0 ? (
+                                        <p className="text-center py-10 text-gray-300 font-bold uppercase text-[10px] tracking-widest">Nenhuma receita para este período</p>
+                                    ) : incomeGroups.map((group: any) => (
+                                        <div key={group.id} className="bg-white rounded-3xl border shadow-sm overflow-hidden group">
+                                            <button
+                                                onClick={() => toggleGroup(group.id)}
+                                                className="w-full p-6 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-4 text-left">
+                                                    <div className="h-10 w-10 bg-green-50 rounded-xl flex items-center justify-center text-green-500">
+                                                        <span className="material-symbols-outlined text-sm font-bold">payments</span>
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-black text-gray-800 text-sm">{group.name}</h3>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{group.count} LANÇAMENTOS</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <span className="text-sm font-black text-green-600">+ R$ {group.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                    <span className={`material-symbols-outlined text-gray-300 transition-transform duration-300 ${expandedCFGroups.has(group.id) ? 'rotate-180' : ''}`}>expand_more</span>
+                                                </div>
+                                            </button>
+
+                                            {expandedCFGroups.has(group.id) && (
+                                                <div className="bg-gray-50/50 border-t border-gray-100 animate-in slide-in-from-top-2 duration-300">
+                                                    <table className="w-full text-xs">
+                                                        <thead>
+                                                            <tr className="text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                                                <th className="px-8 py-3">Data</th>
+                                                                <th className="px-8 py-3">Descrição</th>
+                                                                <th className="px-8 py-3">Conta</th>
+                                                                <th className="px-8 py-3 text-right">Valor</th>
+                                                                <th className="px-8 py-3 text-center">Ação</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100/50">
+                                                            {group.entries.map((e: any) => (
+                                                                <tr key={e.id} className="hover:bg-white transition-colors">
+                                                                    <td className="px-8 py-4 font-bold text-gray-400">{formatDate(e.due_date)}</td>
+                                                                    <td className="px-8 py-4 font-black text-gray-700">{e.description}</td>
+                                                                    <td className="px-8 py-4 font-bold text-gray-400">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || 'N/A'}</td>
+                                                                    <td className="px-8 py-4 text-right font-black text-green-600">R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                                    <td className="px-8 py-4 text-center">
+                                                                        <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {incomeGroups.length > 0 && (
+                                        <div className="bg-green-500/5 rounded-3xl p-6 flex justify-between items-center border border-green-500/10">
+                                            <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Total de Receitas Operacionais</span>
+                                            <span className="text-xl font-black text-green-600">R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+
+                            {/* Fluxo de Saída Section */}
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-4">
+                                    <span className="px-4 py-1.5 bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-full">Fluxo de Saída</span>
+                                    <div className="h-px bg-gray-100 flex-1"></div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {expenseGroups.length === 0 ? (
+                                        <p className="text-center py-10 text-gray-300 font-bold uppercase text-[10px] tracking-widest">Nenhuma despesa para este período</p>
+                                    ) : expenseGroups.map((group: any) => (
+                                        <div key={group.id} className="bg-white rounded-3xl border shadow-sm overflow-hidden group">
+                                            <button
+                                                onClick={() => toggleGroup(group.id)}
+                                                className="w-full p-6 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-4 text-left">
+                                                    <div className="h-10 w-10 bg-red-50 rounded-xl flex items-center justify-center text-red-500">
+                                                        <span className="material-symbols-outlined text-sm font-bold">shopping_bag</span>
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-black text-gray-800 text-sm">{group.name}</h3>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{group.count} LANÇAMENTOS</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <span className="text-sm font-black text-red-600">- R$ {group.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                    <span className={`material-symbols-outlined text-gray-300 transition-transform duration-300 ${expandedCFGroups.has(group.id) ? 'rotate-180' : ''}`}>expand_more</span>
+                                                </div>
+                                            </button>
+
+                                            {expandedCFGroups.has(group.id) && (
+                                                <div className="bg-gray-50/50 border-t border-gray-100 animate-in slide-in-from-top-2 duration-300">
+                                                    <table className="w-full text-xs">
+                                                        <thead>
+                                                            <tr className="text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                                                <th className="px-8 py-3">Data</th>
+                                                                <th className="px-8 py-3">Descrição</th>
+                                                                <th className="px-8 py-3">Conta</th>
+                                                                <th className="px-8 py-3 text-right">Valor</th>
+                                                                <th className="px-8 py-3 text-center">Ação</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100/50">
+                                                            {group.entries.map((e: any) => (
+                                                                <tr key={e.id} className="hover:bg-white transition-colors">
+                                                                    <td className="px-8 py-4 font-bold text-gray-400">{formatDate(e.due_date)}</td>
+                                                                    <td className="px-8 py-4 font-black text-gray-700">{e.description}</td>
+                                                                    <td className="px-8 py-4 font-bold text-gray-400">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || 'N/A'}</td>
+                                                                    <td className="px-8 py-4 text-right font-black text-red-600">R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                                    <td className="px-8 py-4 text-center">
+                                                                        <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {expenseGroups.length > 0 && (
+                                        <div className="bg-red-500/5 rounded-3xl p-6 flex justify-between items-center border border-red-500/10">
+                                            <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">Total de Despesas Operacionais</span>
+                                            <span className="text-xl font-black text-red-600">R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* Accounts & Cards Tab */}
                 {activeTab === 'accounts' && (
