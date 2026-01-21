@@ -788,13 +788,20 @@ const AdminDashboard: React.FC = () => {
 
         const currentBankTotal = bankAccounts.reduce((acc, b) => acc + b.balance, 0);
 
-        // Cumulative Balance Logic:
-        // Initial Balance (Period Start) = Current Balance - Net Paid Impact (from Period Start to Now/Infinity)
-        const netPaidFromPeriodStart = financialEntries
+        // Cumulative & Projected Balance Logic:
+        // Initial Balance (D) = Current Bank Total 
+        //                      + Net of all PENDING entries BEFORE D (money expected to be in but isn't yet)
+        //                      - Net of all PAID entries ON OR AFTER D (money already in but shouldn't be yet)
+
+        const netPendingBeforePeriod = financialEntries
+            .filter(e => e.status !== 'paid' && new Date(e.due_date) < periodStart)
+            .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
+
+        const netPaidOnOrAfterPeriod = financialEntries
             .filter(e => e.status === 'paid' && new Date(e.due_date) >= periodStart)
             .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
 
-        const initialBalance = currentBankTotal - netPaidFromPeriodStart;
+        const initialBalance = currentBankTotal + netPendingBeforePeriod - netPaidOnOrAfterPeriod;
 
         return {
             filteredEntries,
