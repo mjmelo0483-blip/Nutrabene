@@ -91,9 +91,12 @@ interface CreditCard {
     id: string;
     name: string;
     limit_amount: number;
-    current_balance: number;
+    current_balance: number; // Initial/Reference balance, though we'll compute it
     closing_day: number;
     due_day: number;
+    last_4_digits?: string;
+    brand?: string;
+    color?: string;
 }
 
 const formatDate = (dateStr?: string) => {
@@ -182,6 +185,9 @@ const AdminDashboard: React.FC = () => {
 
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
 
+    const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+    const [invoiceDate, setInvoiceDate] = useState<Date>(new Date());
+
     const askConfirmation = (title: string, message: string, onConfirm: () => void) => {
         setConfirmModal({ isOpen: true, title, message, onConfirm });
     };
@@ -190,6 +196,12 @@ const AdminDashboard: React.FC = () => {
     useEffect(() => {
         checkUser();
     }, []);
+
+    useEffect(() => {
+        if (!selectedCardId && creditCards.length > 0) {
+            setSelectedCardId(creditCards[0].id);
+        }
+    }, [creditCards]);
 
     async function checkUser() {
         const { data: { session } } = await supabase.auth.getSession();
@@ -723,6 +735,32 @@ const AdminDashboard: React.FC = () => {
             fetchData();
         }
     }
+
+    const getCardMetrics = (cardId: string, month: number, year: number) => {
+        const card = creditCards.find(c => c.id === cardId);
+        if (!card) return { available: 0, spent: 0, invoiceTotal: 0, invoiceEntries: [], categoryData: {} };
+
+        const unpaidEntries = financialEntries.filter(e => e.credit_card_id === cardId && e.status !== 'paid');
+        const spentVal = unpaidEntries.reduce((acc, e) => acc + e.amount, 0) + (card.current_balance || 0);
+        const availableVal = card.limit_amount - spentVal;
+
+        const invoiceEntries = financialEntries.filter(e => {
+            if (e.credit_card_id !== cardId) return false;
+            const d = new Date(e.due_date);
+            return d.getMonth() === month && d.getFullYear() === year;
+        }).sort((a, b) => new Date(b.due_date).getTime() - new Date(a.due_date).getTime());
+
+        const invoiceTotal = invoiceEntries.reduce((acc, e) => acc + e.amount, 0);
+
+        const categoryData = invoiceEntries.reduce((acc: any, e) => {
+            const catId = (e as any).category_id;
+            const catName = categories.find(c => c.id === catId)?.name || e.category || 'Outros';
+            acc[catName] = (acc[catName] || 0) + e.amount;
+            return acc;
+        }, {});
+
+        return { available: availableVal, spent: spentVal, invoiceTotal, invoiceEntries, categoryData };
+    };
 
     async function handleSaveCategory(e: React.FormEvent) {
         e.preventDefault();
@@ -1571,64 +1609,309 @@ const AdminDashboard: React.FC = () => {
 
                 {/* Accounts & Cards Tab */}
                 {activeTab === 'accounts' && (
-                    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                            {/* Bank Accounts Section */}
-                            <section className="space-y-6">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-2xl font-black text-gray-800">Contas Bancárias</h2>
-                                    <button onClick={() => { setAccountForm({ balance: 0 }); setIsAccountModalOpen(true); }} className="h-10 w-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center hover:bg-primary hover:text-white transition-all shadow-sm">
-                                        <span className="material-symbols-outlined">add</span>
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4">
-                                    {bankAccounts.map(bank => (
-                                        <div key={bank.id} className="bg-white px-4 py-5 rounded-3xl border shadow-sm flex justify-between items-center group">
-                                            <div>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{bank.name}</p>
-                                                <p className="text-xl font-black text-gray-800 whitespace-nowrap">R$ {bank.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                            </div>
-                                            <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => { setAccountForm(bank); setIsAccountModalOpen(true); }} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors">
-                                                    <span className="material-symbols-outlined text-sm">edit</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
+                    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300 h-[calc(100vh-140px)] flex flex-col">
+                        <section className="bg-white p-8 rounded-[40px] border shadow-sm flex justify-between items-center bg-gradient-to-r from-white to-gray-50/50">
+                            <div>
+                                <h1 className="text-2xl font-black text-gray-800">Cartões de Crédito</h1>
+                                <p className="text-sm text-gray-400">Gerencie seus limites, faturas e cartões.</p>
+                            </div>
+                            <div className="flex gap-4">
+                                <button onClick={() => { setAccountForm({ balance: 0 }); setIsAccountModalOpen(true); }} className="px-6 py-4 bg-white border border-gray-100 rounded-[24px] font-black text-xs text-gray-500 hover:bg-gray-50 flex items-center shadow-sm transition-all hover:scale-105 active:scale-95">
+                                    <span className="material-symbols-outlined mr-2">account_balance_wallet</span> Gerenciar Bancos
+                                </button>
+                                <button onClick={() => { setCardForm({ limit_amount: 0, current_balance: 0 }); setIsCardModalOpen(true); }} className="px-6 py-4 bg-indigo-600 text-white rounded-[24px] font-black text-xs shadow-xl shadow-indigo-200 flex items-center transition-all hover:scale-105 active:scale-95">
+                                    <span className="material-symbols-outlined mr-2">add</span> Adicionar Cartão
+                                </button>
+                            </div>
+                        </section>
 
-                            {/* Credit Cards Section */}
-                            <section className="space-y-6">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-2xl font-black text-gray-800">Cartões de Crédito</h2>
-                                    <button onClick={() => { setCardForm({ limit_amount: 0, current_balance: 0 }); setIsCardModalOpen(true); }} className="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
-                                        <span className="material-symbols-outlined">credit_card</span>
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4">
-                                    {creditCards.map(card => (
-                                        <div key={card.id} className="bg-white px-4 py-5 rounded-3xl border shadow-sm relative overflow-hidden group">
-                                            <div className="absolute top-0 right-0 p-4">
-                                                <button onClick={() => { setCardForm(card); setIsCardModalOpen(true); }} className="text-gray-300 hover:text-blue-500 p-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <div className="flex flex-1 gap-8 min-h-0">
+                            {/* Left Column: Card List & Bank Accounts */}
+                            <div className="w-80 flex flex-col gap-8 overflow-y-auto pr-2 pb-10">
+                                <section className="space-y-4">
+                                    <div className="flex justify-between items-center px-2">
+                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Meus Cartões</h3>
+                                        <span className="bg-gray-100 text-gray-400 text-[9px] font-black px-2 py-0.5 rounded-full">{creditCards.length}</span>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {creditCards.length === 0 ? (
+                                            <div className="p-10 border-2 border-dashed rounded-3xl text-center text-gray-300 text-[10px] font-black uppercase">Nenhum cartão</div>
+                                        ) : creditCards.map(card => (
+                                            <button
+                                                key={card.id}
+                                                onClick={() => setSelectedCardId(card.id)}
+                                                className={`w-full p-4 rounded-[28px] border text-left transition-all relative overflow-hidden group ${selectedCardId === card.id ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+                                            >
+                                                <div className="flex items-center gap-4 relative z-10">
+                                                    <div className={`h-11 w-11 ${card.color || 'bg-indigo-600'} rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100`}>
+                                                        <span className="material-symbols-outlined text-sm">credit_card</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-[11px] font-black text-gray-800 truncate uppercase mt-0.5">{card.name}</p>
+                                                        <p className="text-[9px] text-gray-400 font-bold tracking-tighter">FINAL {card.last_4_digits || '0000'}</p>
+                                                    </div>
+                                                    {selectedCardId === card.id && (
+                                                        <div className="h-6 w-6 bg-indigo-600 rounded-full flex items-center justify-center text-white">
+                                                            <span className="material-symbols-outlined text-[12px] font-bold">check</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </section>
+
+                                <section className="space-y-4">
+                                    <div className="flex justify-between items-center px-2">
+                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contas Bancárias</h3>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {bankAccounts.map(bank => (
+                                            <div key={bank.id} className="bg-white p-5 rounded-[28px] border border-gray-100 flex justify-between items-center shadow-sm hover:border-gray-200 transition-colors">
+                                                <div className="min-w-0">
+                                                    <p className="text-[9px] font-black text-gray-300 uppercase truncate mb-1">{bank.name}</p>
+                                                    <p className="text-sm font-black text-gray-800 truncate tracking-tight">R$ {bank.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                </div>
+                                                <button onClick={() => { setAccountForm(bank); setIsAccountModalOpen(true); }} className="h-8 w-8 bg-gray-50 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
                                                     <span className="material-symbols-outlined text-sm">edit</span>
                                                 </button>
                                             </div>
-                                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{card.name}</p>
-                                            <div className="flex justify-between items-end">
-                                                <div>
-                                                    <p className="text-xs text-gray-400 font-bold uppercase">Fatura Atual</p>
-                                                    <p className="text-xl font-black text-red-500 whitespace-nowrap">R$ {card.current_balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        ))}
+                                    </div>
+                                </section>
+
+                                {selectedCardId && (
+                                    <button
+                                        onClick={() => {
+                                            const card = creditCards.find(c => c.id === selectedCardId);
+                                            if (card) {
+                                                askConfirmation('Remover Cartão', `Deseja realmente remover o cartão ${card.name}?`, async () => {
+                                                    await supabase.from('credit_cards').delete().eq('id', card.id);
+                                                    setSelectedCardId(null);
+                                                    fetchData();
+                                                });
+                                            }
+                                        }}
+                                        className="w-full py-4 rounded-[20px] border border-red-50 text-red-400 text-[10px] font-black uppercase hover:bg-red-50 transition-all flex items-center justify-center gap-2 mt-4"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">delete</span> Remover Cartão
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Right Column: Details */}
+                            <div className="flex-1 overflow-y-auto pr-4 space-y-8 pb-20 scrollbar-hide">
+                                {selectedCardId ? (() => {
+                                    const card = creditCards.find(c => c.id === selectedCardId)!;
+                                    const { available, spent, invoiceTotal, invoiceEntries, categoryData } = getCardMetrics(selectedCardId, invoiceDate.getMonth(), invoiceDate.getFullYear());
+                                    const spentPercent = Math.min(100, (spent / card.limit_amount) * 100);
+
+                                    return (
+                                        <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+                                            {/* Header Metrics */}
+                                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                                                {/* Visual Card */}
+                                                <div className={`${card.color || 'bg-indigo-600'} rounded-[40px] p-8 text-white relative shadow-2xl overflow-hidden aspect-[1.6/1] flex flex-col justify-between group transform transition-all hover:scale-[1.02] active:scale-95 cursor-pointer`}>
+                                                    <div className="absolute -top-12 -right-12 h-48 w-48 bg-white/20 rounded-full blur-3xl group-hover:bg-white/30 transition-all" />
+                                                    <div className="absolute -bottom-8 -left-8 h-32 w-32 bg-black/10 rounded-full blur-2xl" />
+
+                                                    <div className="flex justify-between items-start relative z-10">
+                                                        <div>
+                                                            <h3 className="font-black text-xl tracking-tight leading-none mb-1">{card.name}</h3>
+                                                            <div className="flex items-center gap-2 opacity-60">
+                                                                <span className="material-symbols-outlined text-xs">contactless</span>
+                                                                <p className="text-[10px] font-bold tracking-widest uppercase">NÚMERO DO CARTÃO</p>
+                                                            </div>
+                                                            <p className="font-bold tracking-[0.25em] text-xl mt-4 drop-shadow-md">•••• •••• •••• {card.last_4_digits || '0000'}</p>
+                                                        </div>
+                                                        <button onClick={(e) => { e.stopPropagation(); setCardForm(card); setIsCardModalOpen(true); }} className="h-10 w-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-white/40">
+                                                            <span className="material-symbols-outlined text-sm text-white">edit</span>
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="flex justify-between items-end relative z-10">
+                                                        <div>
+                                                            <p className="text-[8px] uppercase font-black opacity-50 mb-0.5">Bandeira</p>
+                                                            <p className="font-black text-base uppercase tracking-wider">{card.brand || 'NUTRA'}</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-[8px] uppercase font-black opacity-50 mb-0.5">Fechamento / Vencimento</p>
+                                                            <p className="font-black text-base uppercase">DIA {card.closing_day} / {card.due_day}</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-[10px] text-gray-300 font-bold lowercase whitespace-nowrap">Limite: R$ {card.limit_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                                    <p className="text-[10px] text-gray-400 font-black">Vence dia {card.due_day}</p>
+
+                                                {/* Limit Info */}
+                                                <div className="bg-white rounded-[40px] border p-8 flex flex-col justify-center shadow-sm relative overflow-hidden">
+                                                    <div className="absolute top-0 right-0 p-6 opacity-5">
+                                                        <span className="material-symbols-outlined text-8xl">account_balance</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 mb-6 relative z-10">
+                                                        <div className="h-10 w-10 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center">
+                                                            <span className="material-symbols-outlined">analytics</span>
+                                                        </div>
+                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Limite Total</p>
+                                                    </div>
+                                                    <p className="text-3xl font-black text-gray-800 mb-6 relative z-10">R$ {card.limit_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                    <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden relative z-10">
+                                                        <div className="bg-blue-500 h-full transition-all duration-1000 ease-out shadow-sm" style={{ width: `${spentPercent}%` }} />
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-400 font-bold mt-3 relative z-10">
+                                                        <span className="text-blue-500">R$ {spent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> utilizado ({spentPercent.toFixed(1)}%)
+                                                    </p>
+                                                </div>
+
+                                                <div className="bg-white rounded-[40px] border p-8 flex flex-col justify-center shadow-sm relative overflow-hidden">
+                                                    <div className="absolute top-0 right-0 p-6 opacity-5">
+                                                        <span className="material-symbols-outlined text-8xl text-green-500">check_circle</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 mb-6 relative z-10">
+                                                        <div className="h-10 w-10 bg-green-50 text-green-500 rounded-2xl flex items-center justify-center">
+                                                            <span className="material-symbols-outlined">verified</span>
+                                                        </div>
+                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Limite Disponível</p>
+                                                    </div>
+                                                    <p className="text-3xl font-black text-gray-800 mb-6 relative z-10">R$ {available.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                    <div className="flex items-center gap-2 relative z-10">
+                                                        <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                                                        <p className="text-[10px] text-green-500 font-black uppercase tracking-tight">LIBERADO PARA COMPRAS</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Invoice Section */}
+                                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                                <div className="lg:col-span-2 bg-white rounded-[40px] border shadow-sm flex flex-col min-h-[500px] overflow-hidden">
+                                                    <div className="p-8 border-b flex justify-between items-center bg-gray-50/20">
+                                                        <div className="flex items-center gap-5">
+                                                            <button
+                                                                onClick={() => {
+                                                                    const prev = new Date(invoiceDate);
+                                                                    prev.setMonth(prev.getMonth() - 1);
+                                                                    setInvoiceDate(prev);
+                                                                }}
+                                                                className="h-11 w-11 bg-white border border-gray-100 rounded-2xl flex items-center justify-center hover:bg-gray-50 transition-all shadow-sm"
+                                                            >
+                                                                <span className="material-symbols-outlined text-gray-400">chevron_left</span>
+                                                            </button>
+                                                            <div className="text-center">
+                                                                <h3 className="text-xl font-black text-gray-800 capitalize leading-none mb-1">
+                                                                    {invoiceDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                                                </h3>
+                                                                <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-500 text-[8px] font-black uppercase">Vencimento: {formatDate(new Date(invoiceDate.getFullYear(), invoiceDate.getMonth(), card.due_day).toISOString())}</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const next = new Date(invoiceDate);
+                                                                    next.setMonth(next.getMonth() + 1);
+                                                                    setInvoiceDate(next);
+                                                                }}
+                                                                className="h-11 w-11 bg-white border border-gray-100 rounded-2xl flex items-center justify-center hover:bg-gray-50 transition-all shadow-sm"
+                                                            >
+                                                                <span className="material-symbols-outlined text-gray-400">chevron_right</span>
+                                                            </button>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">TOTAL DA FATURA</p>
+                                                            <p className="text-3xl font-black text-gray-800">R$ {invoiceTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex-1 overflow-x-auto">
+                                                        <table className="w-full">
+                                                            <thead className="bg-gray-50/50 text-[9px] text-gray-400 font-black uppercase tracking-widest border-b">
+                                                                <tr>
+                                                                    <th className="px-8 py-5 text-left">Data</th>
+                                                                    <th className="px-8 py-5 text-left">Descrição / Categoria</th>
+                                                                    <th className="px-8 py-5 text-right whitespace-nowrap">Valor Lançado</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y text-sm">
+                                                                {invoiceEntries.length === 0 ? (
+                                                                    <tr>
+                                                                        <td colSpan={3} className="py-24 text-center">
+                                                                            <div className="opacity-10 mb-4 animate-bounce"><span className="material-symbols-outlined text-5xl">receipt_long</span></div>
+                                                                            <p className="text-gray-300 font-black uppercase text-[10px] tracking-widest">Nenhuma movimentação identificada</p>
+                                                                        </td>
+                                                                    </tr>
+                                                                ) : invoiceEntries.map(entry => (
+                                                                    <tr key={entry.id} className="hover:bg-gray-50/30 transition-colors group">
+                                                                        <td className="px-8 py-5 text-[10px] text-gray-400 font-bold font-mono uppercase">{formatDate(entry.due_date)}</td>
+                                                                        <td className="px-8 py-5">
+                                                                            <p className="font-black text-gray-700 text-xs mb-0.5">{entry.description}</p>
+                                                                            <span className="px-2 py-0.5 rounded-lg bg-gray-50 text-gray-400 text-[8px] font-black uppercase">{categories.find(c => c.id === (entry as any).category_id)?.name || entry.category}</span>
+                                                                        </td>
+                                                                        <td className="px-8 py-5 text-right">
+                                                                            <p className="font-black text-gray-800 text-sm">R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                                            {entry.installments_total && entry.installments_total > 1 && (
+                                                                                <span className="text-[8px] text-indigo-400 font-black uppercase">Parcela {entry.installment_number}/{entry.installments_total}</span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-white rounded-[40px] border shadow-sm p-8 flex flex-col overflow-hidden">
+                                                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-8 px-2">Detalhamento por Categoria</h3>
+                                                    <div className="space-y-7 flex-1 overflow-y-auto pr-2">
+                                                        {Object.keys(categoryData).length === 0 ? (
+                                                            <div className="h-full flex items-center justify-center text-gray-200 font-bold italic text-xs">Sem lançamentos</div>
+                                                        ) : Object.keys(categoryData).sort((a, b) => categoryData[b] - categoryData[a]).map((cat, idx) => {
+                                                            const val = categoryData[cat];
+                                                            const perc = (val / invoiceTotal) * 100;
+                                                            const colors = ['bg-indigo-500', 'bg-blue-500', 'bg-purple-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+                                                            const colorClass = colors[idx % colors.length];
+                                                            return (
+                                                                <div key={cat} className="space-y-3">
+                                                                    <div className="flex justify-between items-end">
+                                                                        <div className="space-y-1">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className={`h-2.5 w-2.5 rounded-full ${colorClass}`} />
+                                                                                <span className="text-[10px] font-black text-gray-600 uppercase truncate max-w-[120px]">{cat}</span>
+                                                                            </div>
+                                                                            <p className="text-[9px] text-gray-300 font-bold ml-4">{perc.toFixed(1)}% do total</p>
+                                                                        </div>
+                                                                        <span className="text-xs font-black text-gray-800">R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-gray-50 h-2 rounded-full overflow-hidden">
+                                                                        <div className={`${colorClass} h-full opacity-90 transition-all duration-1000`} style={{ width: `${perc}%` }} />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <div className="pt-8 mt-auto border-t">
+                                                        <div className="bg-indigo-50 rounded-2xl p-4 flex items-center gap-3">
+                                                            <div className="h-8 w-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white">
+                                                                <span className="material-symbols-outlined text-sm">savings</span>
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <p className="text-[8px] font-black text-indigo-400 uppercase leading-none mb-1">Economia Prevista</p>
+                                                                <p className="text-[10px] text-indigo-600 font-bold">Considere liquidar a fatura antecipadamente se houver descontos.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            </section>
+                                    );
+                                })() : (
+                                    <div className="h-full flex flex-col items-center justify-center bg-gray-50/50 rounded-[60px] border-4 border-dashed border-white shadow-inner">
+                                        <div className="text-center space-y-6 max-w-xs animate-pulse">
+                                            <div className="h-24 w-24 bg-white rounded-[32px] flex items-center justify-center mx-auto shadow-xl border border-gray-100">
+                                                <span className="material-symbols-outlined text-5xl text-gray-200">credit_score</span>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <p className="font-black text-gray-400 uppercase tracking-[0.2em] text-[10px]">Portal de Cartões</p>
+                                                <p className="text-gray-300 text-xs font-medium px-4">Selecione um cartão na lista lateral para visualizar faturas e limites.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1949,6 +2232,26 @@ const AdminDashboard: React.FC = () => {
                                 </label>
                             </div>
                             <input type="number" step="0.01" value={cardForm.limit_amount || 0} onChange={e => setCardForm({ ...cardForm, limit_amount: parseFloat(e.target.value) })} placeholder="Limite Total (R$)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <input type="text" value={cardForm.brand || ''} onChange={e => setCardForm({ ...cardForm, brand: e.target.value })} placeholder="Bandeira (Ex: VISA)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" />
+                                <input type="text" maxLength={4} value={cardForm.last_4_digits || ''} onChange={e => setCardForm({ ...cardForm, last_4_digits: e.target.value })} placeholder="4 últimos dígitos" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Cor do Cartão</label>
+                                <div className="flex gap-2 p-2">
+                                    {['bg-green-600', 'bg-blue-600', 'bg-indigo-600', 'bg-purple-600', 'bg-orange-500', 'bg-gray-800'].map(color => (
+                                        <button
+                                            key={color}
+                                            type="button"
+                                            onClick={() => setCardForm({ ...cardForm, color })}
+                                            className={`h-8 w-8 rounded-full ${color} ${cardForm.color === color ? 'ring-4 ring-offset-2 ring-primary/30' : ''}`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
                             <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-[20px] font-black shadow-xl">Salvar Cartão</button>
                         </form>
                     </div>
