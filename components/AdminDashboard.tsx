@@ -741,8 +741,8 @@ const AdminDashboard: React.FC = () => {
         if (!card) return { available: 0, spent: 0, invoiceTotal: 0, invoiceEntries: [], categoryData: {} };
 
         const unpaidEntries = financialEntries.filter(e => e.credit_card_id === cardId && e.status !== 'paid');
-        const spentVal = unpaidEntries.reduce((acc, e) => acc + e.amount, 0) + (card.current_balance || 0);
-        const availableVal = card.limit_amount - spentVal;
+        const spentVal = unpaidEntries.reduce((acc, e) => acc + e.amount, 0);
+        const availableVal = Math.max(0, card.limit_amount - spentVal);
 
         const invoiceEntries = financialEntries.filter(e => {
             if (e.credit_card_id !== cardId) return false;
@@ -1757,7 +1757,7 @@ const AdminDashboard: React.FC = () => {
                                                         <div className="bg-blue-500 h-full transition-all duration-1000 ease-out shadow-sm" style={{ width: `${spentPercent}%` }} />
                                                     </div>
                                                     <p className="text-[10px] text-gray-400 font-bold mt-3 relative z-10">
-                                                        <span className="text-blue-500">R$ {spent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> utilizado ({spentPercent.toFixed(1)}%)
+                                                        <span className="text-blue-500">R$ {spent.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> em aberto ({spentPercent.toFixed(1)}%)
                                                     </p>
                                                 </div>
 
