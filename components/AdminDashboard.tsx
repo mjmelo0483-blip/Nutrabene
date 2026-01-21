@@ -151,16 +151,16 @@ const AdminDashboard: React.FC = () => {
         discount_amount: 0,
         total_price: 0,
         net_amount: 0,
-        sale_date: new Date().toISOString().split('T')[0],
-        due_date: new Date().toISOString().split('T')[0],
+        sale_date: new Date().toLocaleDateString('sv-SE'),
+        due_date: new Date().toLocaleDateString('sv-SE'),
         payment_status: 'pending'
     });
 
     const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
     const [financialForm, setFinancialForm] = useState<Partial<FinancialEntry>>({
         type: 'payable',
-        due_date: new Date().toISOString().split('T')[0],
-        entry_date: new Date().toISOString().split('T')[0],
+        due_date: new Date().toLocaleDateString('sv-SE'),
+        entry_date: new Date().toLocaleDateString('sv-SE'),
         status: 'pending',
         payment_method: 'cash',
         installments_total: 1
@@ -518,7 +518,7 @@ const AdminDashboard: React.FC = () => {
                 type: 'receivable',
                 description: `Venda #${sale.id.slice(0, 8)} - ${product.name}`,
                 amount: saleForm.net_amount,
-                due_date: saleForm.due_date || new Date().toISOString().split('T')[0],
+                due_date: saleForm.due_date || new Date().toLocaleDateString('sv-SE'),
                 status: 'pending',
                 category: 'Venda de Produto',
                 sale_id: sale.id,
@@ -608,18 +608,18 @@ const AdminDashboard: React.FC = () => {
                 const entriesToInsert = [];
 
                 for (let i = 1; i <= installments; i++) {
-                    const entryDate = new Date(entryData.entry_date || new Date());
-                    const dueDate = new Date(entryData.due_date || new Date());
-
+                    const [y, m, d] = (entryData.due_date || new Date().toLocaleDateString('sv-SE')).split('-').map(Number);
+                    const dueDate = new Date(y, m - 1, d);
                     if (i > 1) {
                         dueDate.setMonth(dueDate.getMonth() + (i - 1));
                     }
+                    const finalDueDateStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
 
                     entriesToInsert.push({
                         ...entryData,
                         bank_account_id: bankId,
                         amount: i === installments ? parseFloat((baseAmount - (installmentAmount * (installments - 1))).toFixed(2)) : installmentAmount,
-                        due_date: dueDate.toISOString().split('T')[0],
+                        due_date: finalDueDateStr,
                         installment_number: i,
                         installments_total: installments,
                         description: installments > 1 ? `${entryData.description} (${i}/${installments})` : entryData.description
@@ -742,21 +742,21 @@ const AdminDashboard: React.FC = () => {
     }
 
     const getCashFlowMetrics = () => {
-        const periodStart = new Date(cfBaseDate);
-        periodStart.setHours(0, 0, 0, 0);
-        if (cashFlowMode === 'monthly') {
-            periodStart.setDate(1);
-        }
+        const baseYear = cfBaseDate.getFullYear();
+        const baseMonth = String(cfBaseDate.getMonth() + 1).padStart(2, '0');
+        const baseDay = String(cfBaseDate.getDate()).padStart(2, '0');
+        const baseDateStr = `${baseYear}-${baseMonth}-${baseDay}`;
+
+        const periodStartStr = cashFlowMode === 'daily'
+            ? baseDateStr
+            : `${baseYear}-${baseMonth}-01`;
 
         const filteredEntries = financialEntries.filter(e => {
-            const date = new Date(e.due_date);
+            const entryDateStr = e.due_date.split('T')[0];
             if (cashFlowMode === 'daily') {
-                return date.getDate() === cfBaseDate.getDate() &&
-                    date.getMonth() === cfBaseDate.getMonth() &&
-                    date.getFullYear() === cfBaseDate.getFullYear();
+                return entryDateStr === baseDateStr;
             } else {
-                return date.getMonth() === cfBaseDate.getMonth() &&
-                    date.getFullYear() === cfBaseDate.getFullYear();
+                return entryDateStr.startsWith(`${baseYear}-${baseMonth}`);
             }
         });
 
@@ -788,17 +788,13 @@ const AdminDashboard: React.FC = () => {
 
         const currentBankTotal = bankAccounts.reduce((acc, b) => acc + b.balance, 0);
 
-        // Cumulative & Projected Balance Logic:
-        // Initial Balance (D) = Current Bank Total 
-        //                      + Net of all PENDING entries BEFORE D (money expected to be in but isn't yet)
-        //                      - Net of all PAID entries ON OR AFTER D (money already in but shouldn't be yet)
-
+        // Cumulative & Projected Balance Logic using string comparison for stability
         const netPendingBeforePeriod = financialEntries
-            .filter(e => e.status !== 'paid' && new Date(e.due_date) < periodStart)
+            .filter(e => e.status !== 'paid' && e.due_date.split('T')[0] < periodStartStr)
             .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
 
         const netPaidOnOrAfterPeriod = financialEntries
-            .filter(e => e.status === 'paid' && new Date(e.due_date) >= periodStart)
+            .filter(e => e.status === 'paid' && e.due_date.split('T')[0] >= periodStartStr)
             .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
 
         const initialBalance = currentBankTotal + netPendingBeforePeriod - netPaidOnOrAfterPeriod;
@@ -823,9 +819,10 @@ const AdminDashboard: React.FC = () => {
 
         const invoiceEntries = financialEntries.filter(e => {
             if (e.credit_card_id !== cardId) return false;
-            const d = new Date(e.due_date);
-            return d.getMonth() === month && d.getFullYear() === year;
-        }).sort((a, b) => new Date(b.due_date).getTime() - new Date(a.due_date).getTime());
+            const entryDateStr = e.due_date.split('T')[0];
+            const [y, m] = entryDateStr.split('-');
+            return parseInt(m) - 1 === month && parseInt(y) === year;
+        }).sort((a, b) => b.due_date.localeCompare(a.due_date));
 
         const invoiceTotal = invoiceEntries.reduce((acc, e) => acc + e.amount, 0);
 
@@ -1707,8 +1704,8 @@ const AdminDashboard: React.FC = () => {
                                     onClick={() => {
                                         setFinancialForm({
                                             type: 'payable',
-                                            due_date: cfBaseDate.toISOString().split('T')[0],
-                                            entry_date: new Date().toISOString().split('T')[0],
+                                            due_date: cfBaseDate.toLocaleDateString('sv-SE'),
+                                            entry_date: new Date().toLocaleDateString('sv-SE'),
                                             status: 'pending'
                                         });
                                         setIsFinancialModalOpen(true);
