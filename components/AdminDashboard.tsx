@@ -208,6 +208,90 @@ const AdminDashboard: React.FC = () => {
     const [hoveredProduct, setHoveredProduct] = useState<any>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
+    const dreData = useMemo(() => {
+        const periodSales = sales.filter(s => {
+            const d = new Date(s.sale_date);
+            return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+        });
+
+        const periodCosts = periodSales.reduce((acc, s) => {
+            const prod = products.find(p => p.id === s.product_id);
+            return acc + (s.quantity * (prod?.cost_price || 0));
+        }, 0);
+
+        const grossRevenue = periodSales.reduce((acc, s) => acc + (s.total_price || 0), 0);
+        const cancellations = 0; // Placeholder
+        const netRevenue = grossRevenue - cancellations;
+        const contributionMargin = netRevenue - periodCosts;
+
+        const fixedCategories = ['Aluguel', 'Energia', 'Internet', 'Salários', 'Pró-labore', 'Seguros'];
+        const taxCategories = ['Impostos', 'DAS', 'Taxas'];
+        const feeCategories = ['Tarifas', 'Tarifa C/c', 'Outras Tarifas'];
+
+        const periodEntries = financialEntries.filter(e => {
+            const date = new Date(e.due_date);
+            return date.getMonth() === filterMonth && date.getFullYear() === filterYear;
+        });
+
+        const fixedExpenses = periodEntries
+            .filter(e => {
+                if (e.type !== 'payable') return false;
+                const cat = categories.find(c => c.id === (e as any).category_id);
+                return fixedCategories.includes(cat?.name || '');
+            })
+            .reduce((acc, e) => acc + e.amount, 0);
+
+        const taxes = periodEntries
+            .filter(e => {
+                if (e.type !== 'payable') return false;
+                const cat = categories.find(c => c.id === (e as any).category_id);
+                return taxCategories.includes(cat?.name || '');
+            })
+            .reduce((acc, e) => acc + e.amount, 0);
+
+        const fees = periodEntries
+            .filter(e => {
+                if (e.type !== 'payable') return false;
+                const cat = categories.find(c => c.id === (e as any).category_id);
+                return feeCategories.includes(cat?.name || '');
+            })
+            .reduce((acc, e) => acc + e.amount, 0);
+
+        const commissions = periodSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+
+        const variableExpenses = periodEntries
+            .filter(e => {
+                if (e.type !== 'payable') return false;
+                const cat = categories.find(c => c.id === (e as any).category_id);
+                return !fixedCategories.includes(cat?.name || '') &&
+                    !taxCategories.includes(cat?.name || '') &&
+                    !feeCategories.includes(cat?.name || '') &&
+                    cat?.name !== 'Forn Produtos';
+            })
+            .reduce((acc, e) => acc + e.amount, 0);
+
+        const operationalProfit = contributionMargin - fixedExpenses;
+        const netProfit = operationalProfit - taxes - fees - commissions - variableExpenses;
+
+        return {
+            grossRevenue,
+            cancellations,
+            netRevenue,
+            cpv: periodCosts,
+            contributionMargin,
+            fixedExpenses,
+            operationalProfit,
+            taxes,
+            fees,
+            commissions,
+            variableExpenses,
+            netProfit
+        };
+    }, [sales, financialEntries, products, categories, filterMonth, filterYear]);
+
+    const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const formatPercent = (val: number, base: number) => base === 0 ? '0.00%' : `${((val / base) * 100).toFixed(2)}%`;
+
     const askConfirmation = (title: string, message: string, onConfirm: () => void) => {
         setConfirmModal({ isOpen: true, title, message, onConfirm });
     };
@@ -2566,89 +2650,8 @@ const AdminDashboard: React.FC = () => {
                 )}
                 {/* DRE Tab */}
                 {activeTab === 'dre' && (() => {
-                    const dreData = useMemo(() => {
-                        const periodSales = sales.filter(s => {
-                            const d = new Date(s.sale_date);
-                            return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
-                        });
 
-                        const periodCosts = periodSales.reduce((acc, s) => {
-                            const prod = products.find(p => p.id === s.product_id);
-                            return acc + (s.quantity * (prod?.cost_price || 0));
-                        }, 0);
 
-                        const grossRevenue = periodSales.reduce((acc, s) => acc + (s.total_price || 0), 0);
-                        const cancellations = 0; // Placeholder
-                        const netRevenue = grossRevenue - cancellations;
-                        const contributionMargin = netRevenue - periodCosts;
-
-                        const fixedCategories = ['Aluguel', 'Energia', 'Internet', 'Salários', 'Pró-labore', 'Seguros'];
-                        const taxCategories = ['Impostos', 'DAS', 'Taxas'];
-                        const feeCategories = ['Tarifas', 'Tarifa C/c', 'Outras Tarifas'];
-
-                        const periodEntries = financialEntries.filter(e => {
-                            const date = new Date(e.due_date);
-                            return date.getMonth() === filterMonth && date.getFullYear() === filterYear;
-                        });
-
-                        const fixedExpenses = periodEntries
-                            .filter(e => {
-                                if (e.type !== 'payable') return false;
-                                const cat = categories.find(c => c.id === (e as any).category_id);
-                                return fixedCategories.includes(cat?.name || '');
-                            })
-                            .reduce((acc, e) => acc + e.amount, 0);
-
-                        const taxes = periodEntries
-                            .filter(e => {
-                                if (e.type !== 'payable') return false;
-                                const cat = categories.find(c => c.id === (e as any).category_id);
-                                return taxCategories.includes(cat?.name || '');
-                            })
-                            .reduce((acc, e) => acc + e.amount, 0);
-
-                        const fees = periodEntries
-                            .filter(e => {
-                                if (e.type !== 'payable') return false;
-                                const cat = categories.find(c => c.id === (e as any).category_id);
-                                return feeCategories.includes(cat?.name || '');
-                            })
-                            .reduce((acc, e) => acc + e.amount, 0);
-
-                        const commissions = periodSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
-
-                        const variableExpenses = periodEntries
-                            .filter(e => {
-                                if (e.type !== 'payable') return false;
-                                const cat = categories.find(c => c.id === (e as any).category_id);
-                                return !fixedCategories.includes(cat?.name || '') &&
-                                    !taxCategories.includes(cat?.name || '') &&
-                                    !feeCategories.includes(cat?.name || '') &&
-                                    cat?.name !== 'Forn Produtos';
-                            })
-                            .reduce((acc, e) => acc + e.amount, 0);
-
-                        const operationalProfit = contributionMargin - fixedExpenses;
-                        const netProfit = operationalProfit - taxes - fees - commissions - variableExpenses;
-
-                        return {
-                            grossRevenue,
-                            cancellations,
-                            netRevenue,
-                            cpv: periodCosts,
-                            contributionMargin,
-                            fixedExpenses,
-                            operationalProfit,
-                            taxes,
-                            fees,
-                            commissions,
-                            variableExpenses,
-                            netProfit
-                        };
-                    }, [sales, financialEntries, products, categories, filterMonth, filterYear]);
-
-                    const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    const formatPercent = (val: number, base: number) => base === 0 ? '0.00%' : `${((val / base) * 100).toFixed(2)}%`;
 
                     const Row = ({ label, value, indent = false, isTotal = false, negative = false, baseValue = dreData.grossRevenue }: any) => (
                         <div className={`flex justify-between items-center py-4 px-6 ${isTotal ? 'bg-gray-50 font-black text-gray-800 border-y' : 'border-b border-gray-50'}`}>
