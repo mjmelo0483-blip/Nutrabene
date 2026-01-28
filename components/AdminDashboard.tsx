@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -115,7 +115,7 @@ const AdminDashboard: React.FC = () => {
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState('');
 
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'inventory' | 'sales' | 'resellers' | 'finances' | 'accounts' | 'categories' | 'settings'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'inventory' | 'sales' | 'resellers' | 'finances' | 'accounts' | 'categories' | 'dre' | 'settings'>('dashboard');
     const [registrations, setRegistrations] = useState<Registration[]>([]);
     const [settings, setSettings] = useState<ReminderSettings>({ message_template: '' });
     const [products, setProducts] = useState<ProductInventory[]>([]);
@@ -1088,6 +1088,7 @@ const AdminDashboard: React.FC = () => {
             case 'finances': return 'payments';
             case 'accounts': return 'account_balance';
             case 'categories': return 'category';
+            case 'dre': return 'equalizer';
             case 'settings': return 'settings';
             default: return 'circle';
         }
@@ -1135,14 +1136,14 @@ const AdminDashboard: React.FC = () => {
                 <div className="p-8">
                     <img src="/assets/logo.png" alt="Nutrabene" className="h-10 mb-8" />
                     <nav className="space-y-1">
-                        {['dashboard', 'clients', 'inventory', 'sales', 'resellers', 'finances', 'accounts', 'categories', 'settings'].map((tab) => (
+                        {['dashboard', 'clients', 'inventory', 'sales', 'resellers', 'finances', 'accounts', 'categories', 'dre', 'settings'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab as any)}
                                 className={`w-full flex items-center px-4 py-4 rounded-xl font-bold text-sm transition-all ${activeTab === tab ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'}`}
                             >
                                 <span className="material-symbols-outlined mr-3">{getTabIcon(tab)}</span>
-                                <span className="capitalize">{tab === 'clients' ? 'Clientes' : tab === 'inventory' ? 'Estoque' : tab === 'sales' ? 'Vendas' : tab === 'resellers' ? 'Revendedores' : tab === 'finances' ? 'Financeiro' : tab === 'accounts' ? 'Contas / Cartões' : tab === 'categories' ? 'Categorias' : tab === 'settings' ? 'Configurações' : 'Dashboard'}</span>
+                                <span className="capitalize">{tab === 'clients' ? 'Clientes' : tab === 'inventory' ? 'Estoque' : tab === 'sales' ? 'Vendas' : tab === 'resellers' ? 'Revendedores' : tab === 'finances' ? 'Financeiro' : tab === 'accounts' ? 'Contas / Cartões' : tab === 'categories' ? 'Categorias' : tab === 'dre' ? 'DRE' : tab === 'settings' ? 'Configurações' : 'Dashboard'}</span>
                             </button>
                         ))}
                     </nav>
@@ -1164,12 +1165,13 @@ const AdminDashboard: React.FC = () => {
                                     activeTab === 'inventory' ? 'Controle de Estoque' :
                                         activeTab === 'sales' ? 'Vendas Realizadas' :
                                             activeTab === 'resellers' ? 'Revendedores' :
-                                                activeTab === 'finances' ? 'Controle Financeiro' : 'Configurações'}
+                                                activeTab === 'finances' ? 'Controle Financeiro' :
+                                                    activeTab === 'dre' ? 'Demonstrativo de Resultado' : 'Configurações'}
                         </h1>
                         <p className="text-gray-500 mt-1">Gestão inteligente Nutrabene.</p>
                     </div>
 
-                    {activeTab === 'dashboard' && (
+                    {(activeTab === 'dashboard' || activeTab === 'dre') && (
                         <div className="flex space-x-2">
                             <select
                                 value={filterMonth}
@@ -1189,12 +1191,14 @@ const AdminDashboard: React.FC = () => {
                                     <option key={y} value={y}>{y}</option>
                                 ))}
                             </select>
-                            <button
-                                onClick={() => handleExportDashboardPDF(filterMonth, filterYear, totalRevenue, totalDiscounts, totalCommissions, finalNet, productRanking)}
-                                className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-bold text-sm flex items-center hover:bg-red-600 hover:text-white transition-all border border-red-100"
-                            >
-                                <span className="material-symbols-outlined text-sm mr-2">picture_as_pdf</span> PDF
-                            </button>
+                            {activeTab === 'dashboard' && (
+                                <button
+                                    onClick={() => handleExportDashboardPDF(filterMonth, filterYear, totalRevenue, totalDiscounts, totalCommissions, finalNet, productRanking)}
+                                    className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-bold text-sm flex items-center hover:bg-red-600 hover:text-white transition-all border border-red-100"
+                                >
+                                    <span className="material-symbols-outlined text-sm mr-2">picture_as_pdf</span> PDF
+                                </button>
+                            )}
                         </div>
                     )}
                 </header>
@@ -2560,6 +2564,154 @@ const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
                 )}
+                {/* DRE Tab */}
+                {activeTab === 'dre' && (() => {
+                    const dreData = useMemo(() => {
+                        const periodSales = sales.filter(s => {
+                            const d = new Date(s.sale_date);
+                            return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+                        });
+
+                        const periodCosts = periodSales.reduce((acc, s) => {
+                            const prod = products.find(p => p.id === s.product_id);
+                            return acc + (s.quantity * (prod?.cost_price || 0));
+                        }, 0);
+
+                        const grossRevenue = periodSales.reduce((acc, s) => acc + (s.total_price || 0), 0);
+                        const cancellations = 0; // Placeholder
+                        const netRevenue = grossRevenue - cancellations;
+                        const contributionMargin = netRevenue - periodCosts;
+
+                        const fixedCategories = ['Aluguel', 'Energia', 'Internet', 'Salários', 'Pró-labore', 'Seguros'];
+                        const taxCategories = ['Impostos', 'DAS', 'Taxas'];
+                        const feeCategories = ['Tarifas', 'Tarifa C/c', 'Outras Tarifas'];
+
+                        const periodEntries = financialEntries.filter(e => {
+                            const date = new Date(e.due_date);
+                            return date.getMonth() === filterMonth && date.getFullYear() === filterYear;
+                        });
+
+                        const fixedExpenses = periodEntries
+                            .filter(e => {
+                                if (e.type !== 'payable') return false;
+                                const cat = categories.find(c => c.id === (e as any).category_id);
+                                return fixedCategories.includes(cat?.name || '');
+                            })
+                            .reduce((acc, e) => acc + e.amount, 0);
+
+                        const taxes = periodEntries
+                            .filter(e => {
+                                if (e.type !== 'payable') return false;
+                                const cat = categories.find(c => c.id === (e as any).category_id);
+                                return taxCategories.includes(cat?.name || '');
+                            })
+                            .reduce((acc, e) => acc + e.amount, 0);
+
+                        const fees = periodEntries
+                            .filter(e => {
+                                if (e.type !== 'payable') return false;
+                                const cat = categories.find(c => c.id === (e as any).category_id);
+                                return feeCategories.includes(cat?.name || '');
+                            })
+                            .reduce((acc, e) => acc + e.amount, 0);
+
+                        const commissions = periodSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+
+                        const variableExpenses = periodEntries
+                            .filter(e => {
+                                if (e.type !== 'payable') return false;
+                                const cat = categories.find(c => c.id === (e as any).category_id);
+                                return !fixedCategories.includes(cat?.name || '') &&
+                                    !taxCategories.includes(cat?.name || '') &&
+                                    !feeCategories.includes(cat?.name || '') &&
+                                    cat?.name !== 'Forn Produtos';
+                            })
+                            .reduce((acc, e) => acc + e.amount, 0);
+
+                        const operationalProfit = contributionMargin - fixedExpenses;
+                        const netProfit = operationalProfit - taxes - fees - commissions - variableExpenses;
+
+                        return {
+                            grossRevenue,
+                            cancellations,
+                            netRevenue,
+                            cpv: periodCosts,
+                            contributionMargin,
+                            fixedExpenses,
+                            operationalProfit,
+                            taxes,
+                            fees,
+                            commissions,
+                            variableExpenses,
+                            netProfit
+                        };
+                    }, [sales, financialEntries, products, categories, filterMonth, filterYear]);
+
+                    const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    const formatPercent = (val: number, base: number) => base === 0 ? '0.00%' : `${((val / base) * 100).toFixed(2)}%`;
+
+                    const Row = ({ label, value, indent = false, isTotal = false, negative = false, baseValue = dreData.grossRevenue }: any) => (
+                        <div className={`flex justify-between items-center py-4 px-6 ${isTotal ? 'bg-gray-50 font-black text-gray-800 border-y' : 'border-b border-gray-50'}`}>
+                            <div className="flex items-center">
+                                {indent && <div className="w-6 h-px bg-gray-200 mr-3" />}
+                                <span className={`${indent ? 'text-gray-500 text-sm' : 'text-gray-700 font-bold'}`}>{label}</span>
+                            </div>
+                            <div className="flex items-center gap-8">
+                                <span className={`text-[10px] font-black w-16 text-right ${isTotal ? 'text-primary' : 'text-gray-300'}`}>
+                                    {formatPercent(value, baseValue)}
+                                </span>
+                                <span className={`font-mono text-sm min-w-[120px] text-right ${negative ? 'text-red-500' : isTotal ? 'text-primary' : 'text-gray-700'}`}>
+                                    {negative ? '-' : ''} {formatCurrency(value)}
+                                </span>
+                            </div>
+                        </div>
+                    );
+
+                    return (
+                        <div className="bg-white rounded-[40px] shadow-sm border overflow-hidden animate-in fade-in duration-500 max-w-5xl mx-auto">
+                            <div className="p-10 border-b bg-gray-50/30">
+                                <h2 className="text-2xl font-black text-gray-800">DRE - Demonstrativo de Resultado</h2>
+                                <p className="text-sm text-gray-400 mt-1 uppercase tracking-widest font-bold">Resumo Financeiro do Período Selecionado</p>
+                            </div>
+
+                            <div className="flex flex-col">
+                                <Row label="Receita Bruta" value={dreData.grossRevenue} />
+                                <Row label="(-) Devoluções/Cancelamentos" value={dreData.cancellations} negative indent />
+                                <Row label="(=) Receita Líquida" value={dreData.netRevenue} isTotal />
+
+                                <Row label="(-) CPV (Custo do Produto Vendido)" value={dreData.cpv} negative indent />
+                                <Row label="(=) Margem de Contribuição" value={dreData.contributionMargin} isTotal />
+
+                                <Row label="(-) Despesas Fixas" value={dreData.fixedExpenses} negative indent />
+                                <Row label="(=) Lucro Operacional (EBITDA)" value={dreData.operationalProfit} isTotal />
+
+                                <Row label="(-) Impostos (Simples Nacional)" value={dreData.taxes} negative indent />
+                                <Row label="(-) Taxas (Administrativas/Cartão)" value={dreData.fees} negative indent />
+                                <Row label="(-) Comissões (Vendedores)" value={dreData.commissions} negative indent />
+                                <Row label="(-) Despesas Variáveis" value={dreData.variableExpenses} negative indent />
+
+                                <div className="h-4 bg-gray-50/50" />
+
+                                <div className="bg-primary p-8 flex justify-between items-center text-white">
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-12 w-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                                            <span className="material-symbols-outlined text-3xl">trending_up</span>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-black">LUCRO LÍQUIDO</h3>
+                                            <p className="text-xs font-bold opacity-60 uppercase tracking-widest">Resultado Final do Exercício</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm font-black opacity-60 mb-1">MARGEM LÍQUIDA: {formatPercent(dreData.netProfit, dreData.grossRevenue)}</p>
+                                        <p className="text-4xl font-black">{formatCurrency(dreData.netProfit)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* Settings Tab */}
                 {activeTab === 'settings' && (
                     <div className="max-w-4xl space-y-8 animate-in slide-in-from-bottom-4 duration-300">
