@@ -3181,7 +3181,7 @@ const AdminDashboard: React.FC = () => {
                                                                     {e.status === 'paid' ? 'Pago' : e.status === 'overdue' ? 'Atrasado' : 'Pendente'}
                                                                 </span>
                                                             </td>
-                                                            <td className={`px-6 py-4 text-right font-black ${e.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
+                                                            <td className={`px-6 py-4 text-right font-black whitespace-nowrap ${e.type === 'receivable' ? 'text-green-600' : 'text-red-500'}`}>
                                                                 {e.type === 'receivable' ? '+' : '-'} R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                             </td>
                                                             <td className="px-6 py-4 text-center">
