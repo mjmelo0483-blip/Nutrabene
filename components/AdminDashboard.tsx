@@ -30,6 +30,7 @@ interface ProductInventory {
     cost_price: number;
     initial_stock?: number;
     initial_stock_date?: string;
+    expiration_date?: string;
 }
 
 interface InventoryMovement {
@@ -40,6 +41,7 @@ interface InventoryMovement {
     unit_cost?: number;
     reason?: string;
     movement_date: string;
+    expiration_date?: string;
     created_at?: string;
 }
 
@@ -199,7 +201,8 @@ const AdminDashboard: React.FC = () => {
         type: 'purchase',
         quantity: 0,
         unit_cost: 0,
-        movement_date: new Date().toLocaleDateString('sv-SE')
+        movement_date: new Date().toLocaleDateString('sv-SE'),
+        expiration_date: ''
     });
 
     const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
@@ -648,10 +651,15 @@ const AdminDashboard: React.FC = () => {
             if (movError) throw movError;
 
             // 2. Atualizar produto
-            const { error: prodError } = await supabase.from('products').update({
+            const productUpdate: any = {
                 stock_quantity: newStock,
                 cost_price: newCost
-            }).eq('id', product.id);
+            };
+            if (movementForm.type === 'purchase' && movementForm.expiration_date) {
+                productUpdate.expiration_date = movementForm.expiration_date;
+            }
+
+            const { error: prodError } = await supabase.from('products').update(productUpdate).eq('id', product.id);
             if (prodError) throw prodError;
 
             showNotification('Movimentação registrada com sucesso!');
@@ -2222,6 +2230,7 @@ const AdminDashboard: React.FC = () => {
                                         <tr>
                                             <th className="px-4 py-5">Produto</th>
                                             <th className="px-4 py-5">Valores</th>
+                                            <th className="px-4 py-5 text-center">Vencimento</th>
                                             <th className="px-4 py-5 text-center">Estoque</th>
                                             <th className="px-4 py-5 text-center">Status</th>
                                             <th className="px-4 py-5 text-center">Ações</th>
@@ -2244,6 +2253,14 @@ const AdminDashboard: React.FC = () => {
                                                             <span className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Venda</span>
                                                             <span className="font-black text-green-600 text-xs">R$ {p.price.toLocaleString('pt-BR')}</span>
                                                         </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-5 text-center">
+                                                    <div className={`text-[10px] font-black uppercase ${p.expiration_date ? (new Date(p.expiration_date + 'T23:59:59') < new Date() ? 'text-red-500' : 'text-gray-500') : 'text-gray-300 italic'}`}>
+                                                        {p.expiration_date ? formatDate(p.expiration_date) : 'Não inf.'}
+                                                        {p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < new Date() && (
+                                                            <span className="block text-[8px] text-red-400 mt-1 animate-pulse">VENCIDO</span>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-5">
@@ -4449,6 +4466,10 @@ const AdminDashboard: React.FC = () => {
                                         <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Data Inicial</span>
                                         <input type="date" value={editingProduct?.initial_stock_date || ''} onChange={e => setEditingProduct({ ...editingProduct, initial_stock_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
                                     </label>
+                                    <label className="block col-span-2 mt-2">
+                                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Data de Vencimento</span>
+                                        <input type="date" value={editingProduct?.expiration_date || ''} onChange={e => setEditingProduct({ ...editingProduct, expiration_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" />
+                                    </label>
                                 </div>
 
                                 {editingProduct?.id && products.some(p => p.id === editingProduct.id) && (
@@ -4514,10 +4535,16 @@ const AdminDashboard: React.FC = () => {
                             </div>
 
                             {movementForm.type === 'purchase' ? (
-                                <div className="space-y-2 animate-in slide-in-from-top-2">
-                                    <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-4">Custo Unitário da Compra (R$)</label>
-                                    <input type="number" step="0.01" value={movementForm.unit_cost || 0} onChange={e => setMovementForm({ ...movementForm, unit_cost: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-primary/5 focus:bg-white focus:ring-4 ring-primary/10 outline-none font-bold text-primary" placeholder="0,00" required={movementForm.type === 'purchase'} />
-                                    <p className="text-[10px] text-gray-400 px-4 mt-2 italic">* O custo médio do produto será recalculado automaticamente.</p>
+                                <div className="space-y-4 animate-in slide-in-from-top-2">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-4">Custo Unitário da Compra (R$)</label>
+                                        <input type="number" step="0.01" value={movementForm.unit_cost || 0} onChange={e => setMovementForm({ ...movementForm, unit_cost: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-primary/5 focus:bg-white focus:ring-4 ring-primary/10 outline-none font-bold text-primary" placeholder="0,00" required={movementForm.type === 'purchase'} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-4">Data de Vencimento do Lote</label>
+                                        <input type="date" value={movementForm.expiration_date || ''} onChange={e => setMovementForm({ ...movementForm, expiration_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-primary/5 focus:bg-white focus:ring-4 ring-primary/10 outline-none font-bold text-primary" />
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 px-4 mt-2 italic">* O custo médio e a data de vencimento do produto serão atualizados.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-2 animate-in slide-in-from-top-2">
