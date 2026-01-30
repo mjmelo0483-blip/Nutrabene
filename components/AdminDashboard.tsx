@@ -593,10 +593,13 @@ const AdminDashboard: React.FC = () => {
                 if (updError) { showNotification(updError.message, 'error'); return; }
 
                 // Update the corresponding financial entry
+                const saleCategory = categories.find(c => c.name.toLowerCase().includes('venda de produtos'));
                 await supabase.from('financial_entries')
                     .update({
                         amount: saleForm.net_amount,
                         due_date: saleForm.due_date,
+                        category: saleCategory?.name || 'Venda de Produtos',
+                        category_id: saleCategory?.id,
                         description: `Venda #${saleForm.id.slice(0, 8)} - ${product.name} (Editado)`
                     })
                     .eq('sale_id', saleForm.id);
@@ -615,13 +618,15 @@ const AdminDashboard: React.FC = () => {
             await supabase.from('products').update({ stock_quantity: product.stock_quantity - (saleForm.quantity || 0) }).eq('id', product.id);
 
             // Create financial entry
+            const saleCategory = categories.find(c => c.name.toLowerCase().includes('venda de produtos'));
             await supabase.from('financial_entries').insert([{
                 type: 'receivable',
                 description: `Venda #${sale.id.slice(0, 8)} - ${product.name}`,
                 amount: saleForm.net_amount,
                 due_date: saleForm.due_date || new Date().toLocaleDateString('sv-SE'),
                 status: 'pending',
-                category: 'Venda de Produto',
+                category: saleCategory?.name || 'Venda de Produtos',
+                category_id: saleCategory?.id,
                 sale_id: sale.id,
                 reseller_id: saleForm.reseller_id,
                 client_id: saleForm.client_id
