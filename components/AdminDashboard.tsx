@@ -3906,18 +3906,16 @@ const AdminDashboard: React.FC = () => {
                                     </label>
                                 </div>
 
-                                {(!editingProduct?.id || !products.some(p => p.id === editingProduct.id)) && (
-                                    <div className="grid grid-cols-2 gap-4 p-6 bg-blue-50/50 rounded-3xl border border-blue-100">
-                                        <label className="block">
-                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Estoque Inicial</span>
-                                            <input type="number" value={editingProduct?.initial_stock || 0} onChange={e => setEditingProduct({ ...editingProduct, initial_stock: parseInt(e.target.value) })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
-                                        </label>
-                                        <label className="block">
-                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Data Inicial</span>
-                                            <input type="date" value={editingProduct?.initial_stock_date || ''} onChange={e => setEditingProduct({ ...editingProduct, initial_stock_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
-                                        </label>
-                                    </div>
-                                )}
+                                <div className="grid grid-cols-2 gap-4 p-6 bg-blue-50/50 rounded-3xl border border-blue-100">
+                                    <label className="block">
+                                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Estoque Inicial</span>
+                                        <input type="number" value={editingProduct?.initial_stock || 0} onChange={e => setEditingProduct({ ...editingProduct, initial_stock: parseInt(e.target.value) })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Data Inicial</span>
+                                        <input type="date" value={editingProduct?.initial_stock_date || ''} onChange={e => setEditingProduct({ ...editingProduct, initial_stock_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
+                                    </label>
+                                </div>
 
                                 {editingProduct?.id && products.some(p => p.id === editingProduct.id) && (
                                     <label className="block">
