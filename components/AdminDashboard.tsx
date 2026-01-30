@@ -981,8 +981,8 @@ const AdminDashboard: React.FC = () => {
             doc.setFontSize(8);
             doc.text(filterInfo, 14, 44);
 
-            // Helper function for currency formatting
-            const formatCurrency = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
+            // Helper function for currency formatting (Brazilian format: R$ 1.234,56)
+            const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             // Table data
             const tableData = filteredSales.map(s => [
@@ -1053,7 +1053,7 @@ const AdminDashboard: React.FC = () => {
             doc.setFontSize(8);
             doc.text(filterInfo, 14, 34);
 
-            const formatCurrency = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
+            const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             const tableData = filteredSales.map(s => [
                 formatDate(s.sale_date),
