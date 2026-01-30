@@ -206,6 +206,20 @@ const AdminDashboard: React.FC = () => {
     });
 
     const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+    const [selectedSales, setSelectedSales] = useState<Set<string>>(new Set());
+
+    const [salesFilters, setSalesFilters] = useState({
+        startDate: '',
+        endDate: '',
+        dateType: 'sale_date' as 'sale_date' | 'due_date',
+        productId: '',
+        clientId: '',
+        resellerId: '',
+        minAmount: '',
+        maxAmount: '',
+        status: '',
+        search: ''
+    });
 
     const [hoveredProduct, setHoveredProduct] = useState<any>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -296,6 +310,34 @@ const AdminDashboard: React.FC = () => {
 
     const askConfirmation = (title: string, message: string, onConfirm: () => void) => {
         setConfirmModal({ isOpen: true, title, message, onConfirm });
+    };
+
+    const getFilteredSales = () => {
+        return sales.filter(s => {
+            if (salesFilters.startDate && s[salesFilters.dateType] < salesFilters.startDate) return false;
+            if (salesFilters.endDate && s[salesFilters.dateType] > salesFilters.endDate) return false;
+            if (salesFilters.productId && s.product_id !== salesFilters.productId) return false;
+            if (salesFilters.clientId && s.client_id !== salesFilters.clientId) return false;
+            if (salesFilters.resellerId && s.reseller_id !== salesFilters.resellerId) return false;
+            if (salesFilters.status && s.payment_status !== salesFilters.status) return false;
+            if (salesFilters.minAmount && s.net_amount < parseFloat(salesFilters.minAmount)) return false;
+            if (salesFilters.maxAmount && s.net_amount > parseFloat(salesFilters.maxAmount)) return false;
+
+            if (salesFilters.search) {
+                const search = salesFilters.search.toLowerCase();
+                const product = products.find(p => p.id === s.product_id);
+                const client = registrations.find(c => c.id === s.client_id);
+                const reseller = resellers.find(r => r.id === s.reseller_id);
+
+                return (
+                    product?.name.toLowerCase().includes(search) ||
+                    client?.name.toLowerCase().includes(search) ||
+                    reseller?.name.toLowerCase().includes(search) ||
+                    s.id.toLowerCase().includes(search)
+                );
+            }
+            return true;
+        });
     };
 
     // Check current session
@@ -660,6 +702,39 @@ const AdminDashboard: React.FC = () => {
                 if (error) showNotification(`Erro ao excluir: ${error.message}`, 'error');
                 else {
                     showNotification('Venda e registros associados removidos.');
+                    fetchData();
+                }
+            }
+        );
+    }
+
+    async function handleBulkDeleteSales() {
+        if (selectedSales.size === 0) return;
+        askConfirmation(
+            'Excluir Vendas',
+            `Deseja excluir permanentemente as ${selectedSales.size} vendas selecionadas? O estoque será restaurado automaticamente.`,
+            async () => {
+                const saleIds = Array.from(selectedSales);
+
+                // Restore stock for all selected sales
+                for (const id of saleIds) {
+                    const sale = sales.find(s => s.id === id);
+                    if (sale) {
+                        const product = products.find(p => p.id === sale.product_id);
+                        if (product) {
+                            await supabase.from('products').update({ stock_quantity: product.stock_quantity + sale.quantity }).eq('id', product.id);
+                        }
+                    }
+                }
+
+                // Delete associated financial entries
+                await supabase.from('financial_entries').delete().in('sale_id', saleIds);
+
+                const { error } = await supabase.from('sales').delete().in('id', saleIds);
+                if (error) showNotification(`Erro ao excluir vendas: ${error.message}`, 'error');
+                else {
+                    showNotification(`${saleIds.length} vendas removidas com sucesso!`);
+                    setSelectedSales(new Set());
                     fetchData();
                 }
             }
@@ -1312,7 +1387,7 @@ const AdminDashboard: React.FC = () => {
                         {['dashboard', 'clients', 'inventory', 'sales', 'resellers', 'finances', 'accounts', 'categories', 'dre', 'settings'].map((tab) => (
                             <button
                                 key={tab}
-                                onClick={() => { setActiveTab(tab as any); setSelectedEntries(new Set()); }}
+                                onClick={() => { setActiveTab(tab as any); setSelectedEntries(new Set()); setSelectedSales(new Set()); }}
                                 className={`w-full flex items-center px-4 py-4 rounded-xl font-bold text-sm transition-all ${activeTab === tab ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'}`}
                             >
                                 <span className="material-symbols-outlined mr-3">{getTabIcon(tab)}</span>
@@ -1726,69 +1801,270 @@ const AdminDashboard: React.FC = () => {
                             </button>
                         </div>
 
+                        <div className="bg-white p-6 rounded-3xl border shadow-sm space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tipo de Data</label>
+                                    <select
+                                        value={salesFilters.dateType}
+                                        onChange={e => setSalesFilters({ ...salesFilters, dateType: e.target.value as any })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    >
+                                        <option value="sale_date">📅 Data da Venda</option>
+                                        <option value="due_date">📅 Vencimento</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Início</label>
+                                    <input
+                                        type="date"
+                                        value={salesFilters.startDate}
+                                        onChange={e => setSalesFilters({ ...salesFilters, startDate: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Fim</label>
+                                    <input
+                                        type="date"
+                                        value={salesFilters.endDate}
+                                        onChange={e => setSalesFilters({ ...salesFilters, endDate: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Produto</label>
+                                    <select
+                                        value={salesFilters.productId}
+                                        onChange={e => setSalesFilters({ ...salesFilters, productId: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    >
+                                        <option value="">Todos</option>
+                                        {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Cliente</label>
+                                    <select
+                                        value={salesFilters.clientId}
+                                        onChange={e => setSalesFilters({ ...salesFilters, clientId: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    >
+                                        <option value="">Todos</option>
+                                        {registrations.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status</label>
+                                    <select
+                                        value={salesFilters.status}
+                                        onChange={e => setSalesFilters({ ...salesFilters, status: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    >
+                                        <option value="">Todos</option>
+                                        <option value="pending">⏳ Pendente</option>
+                                        <option value="paid">✅ Pago</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Revendedor</label>
+                                    <select
+                                        value={salesFilters.resellerId}
+                                        onChange={e => setSalesFilters({ ...salesFilters, resellerId: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    >
+                                        <option value="">Todos</option>
+                                        {resellers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Valor Mín.</label>
+                                    <input
+                                        type="number"
+                                        placeholder="0,00"
+                                        value={salesFilters.minAmount}
+                                        onChange={e => setSalesFilters({ ...salesFilters, minAmount: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Valor Máx.</label>
+                                    <input
+                                        type="number"
+                                        placeholder="9999,00"
+                                        value={salesFilters.maxAmount}
+                                        onChange={e => setSalesFilters({ ...salesFilters, maxAmount: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Pesquisar</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Nome, ID, Revendedor..."
+                                        value={salesFilters.search}
+                                        onChange={e => setSalesFilters({ ...salesFilters, search: e.target.value })}
+                                        className="w-full p-3 bg-gray-50 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ring-primary/20"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    onClick={() => setSalesFilters({
+                                        startDate: '',
+                                        endDate: '',
+                                        dateType: 'sale_date',
+                                        productId: '',
+                                        clientId: '',
+                                        resellerId: '',
+                                        minAmount: '',
+                                        maxAmount: '',
+                                        status: '',
+                                        search: ''
+                                    })}
+                                    className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
+                                >
+                                    Limpar Filtros
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 gap-6">
-                            {sales.length === 0 ? (
-                                <div className="bg-gray-50 border-2 border-dashed rounded-3xl p-20 text-center text-gray-400">
-                                    Nenhuma venda registrada ainda.
-                                </div>
-                            ) : (
-                                <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
-                                    <table className="w-full">
-                                        <thead className="bg-gray-50 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                            <tr>
-                                                <th className="px-4 py-5">Venda / Venc.</th>
-                                                <th className="px-4 py-5">Produto / Cliente</th>
-                                                <th className="px-4 py-5">Vendedor</th>
-                                                <th className="px-4 py-5 text-center">Quant.</th>
-                                                <th className="px-4 py-5 text-right">Total (Bruto)</th>
-                                                <th className="px-4 py-5 text-right">Dedução / Com. (%)</th>
-                                                <th className="px-4 py-5 text-right">Líquido</th>
-                                                <th className="px-4 py-5 text-center">Status</th>
-                                                <th className="px-4 py-5 text-center">Ações</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y text-sm">
-                                            {sales.map(s => (
-                                                <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                                                    <td className="px-4 py-5">
-                                                        <div className="text-gray-500 font-medium whitespace-nowrap">{formatDate(s.sale_date)}</div>
-                                                        <div className="text-[10px] text-amber-500 font-black uppercase whitespace-nowrap">Venc: {formatDate(s.due_date)}</div>
-                                                    </td>
-                                                    <td className="px-4 py-5">
-                                                        <div className="font-bold text-gray-800">{products.find(p => p.id === s.product_id)?.name || 'Produto Excluído'}</div>
-                                                        <div className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">{registrations.find(c => c.id === s.client_id)?.name || 'Venda Avulsa'}</div>
-                                                    </td>
-                                                    <td className="px-4 py-5">
-                                                        <div className="text-sm text-gray-600 font-bold">{resellers.find(r => r.id === s.reseller_id)?.name || 'Direta'}</div>
-                                                    </td>
-                                                    <td className="px-4 py-5 text-center font-bold">{s.quantity}</td>
-                                                    <td className="px-4 py-5 text-right font-medium text-gray-500 text-[10px] whitespace-nowrap">R$ {s.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-5 text-right font-bold text-red-400 text-[10px] whitespace-nowrap">
-                                                        - R$ {(s.discount_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                        <span className="block text-[8px] opacity-70">({s.discount_percentage || 0}%) {s.reseller_id ? 'Comissão' : 'Desconto'}</span>
-                                                    </td>
-                                                    <td className="px-4 py-5 text-right font-black text-primary text-sm whitespace-nowrap">R$ {(s.net_amount || s.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-5 text-center text-xs">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${s.payment_status === 'paid' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
-                                                            {s.payment_status === 'paid' ? 'Pago' : 'Pendente'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-5">
-                                                        <div className="flex justify-center space-x-1">
-                                                            <button onClick={() => { setSaleForm(s); setIsSaleModalOpen(true); }} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
-                                                                <span className="material-symbols-outlined text-xs">edit</span>
-                                                            </button>
-                                                            <button onClick={() => handleDeleteSale(s.id)} className="h-7 w-7 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
-                                                                <span className="material-symbols-outlined text-xs">delete</span>
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                            {(() => {
+                                const filteredSalesList = getFilteredSales();
+                                return (
+                                    <>
+                                        {filteredSalesList.length === 0 ? (
+                                            <div className="bg-gray-50 border-2 border-dashed rounded-3xl p-20 text-center text-gray-400 font-bold">
+                                                Nenhuma venda encontrada com os filtros selecionados.
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white rounded-3xl border shadow-sm overflow-hidden relative">
+                                                <table className="w-full">
+                                                    <thead className="bg-gray-50 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                        <tr>
+                                                            <th className="px-6 py-5 w-10">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="w-4 h-4 rounded-lg border-gray-300 text-primary focus:ring-primary/20"
+                                                                    checked={filteredSalesList.length > 0 && filteredSalesList.every(s => selectedSales.has(s.id))}
+                                                                    onChange={(e) => {
+                                                                        const newSelected = new Set(selectedSales);
+                                                                        if (e.target.checked) filteredSalesList.forEach(s => newSelected.add(s.id));
+                                                                        else filteredSalesList.forEach(s => newSelected.delete(s.id));
+                                                                        setSelectedSales(newSelected);
+                                                                    }}
+                                                                />
+                                                            </th>
+                                                            <th className="px-4 py-5">Venda / Venc.</th>
+                                                            <th className="px-4 py-5">Produto / Cliente</th>
+                                                            <th className="px-4 py-5">Vendedor</th>
+                                                            <th className="px-4 py-5 text-center">Quant.</th>
+                                                            <th className="px-4 py-5 text-right">Total (Bruto)</th>
+                                                            <th className="px-4 py-5 text-right">Dedução / Com. (%)</th>
+                                                            <th className="px-4 py-5 text-right">Líquido</th>
+                                                            <th className="px-4 py-5 text-center">Status</th>
+                                                            <th className="px-4 py-5 text-center">Ações</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y text-sm">
+                                                        {filteredSalesList.map(s => (
+                                                            <tr key={s.id} className={`hover:bg-gray-50/50 transition-colors ${selectedSales.has(s.id) ? 'bg-primary/5' : ''}`}>
+                                                                <td className="px-6 py-5">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="w-4 h-4 rounded-lg border-gray-300 text-primary focus:ring-primary/20"
+                                                                        checked={selectedSales.has(s.id)}
+                                                                        onChange={() => {
+                                                                            const newSelected = new Set(selectedSales);
+                                                                            if (newSelected.has(s.id)) newSelected.delete(s.id);
+                                                                            else newSelected.add(s.id);
+                                                                            setSelectedSales(newSelected);
+                                                                        }}
+                                                                    />
+                                                                </td>
+                                                                <td className="px-4 py-5">
+                                                                    <div className="text-gray-500 font-medium whitespace-nowrap">{formatDate(s.sale_date)}</div>
+                                                                    <div className="text-[10px] text-amber-500 font-black uppercase whitespace-nowrap">Venc: {formatDate(s.due_date)}</div>
+                                                                </td>
+                                                                <td className="px-4 py-5">
+                                                                    <div className="font-bold text-gray-800">{products.find(p => p.id === s.product_id)?.name || 'Produto Excluído'}</div>
+                                                                    <div className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">{registrations.find(c => c.id === s.client_id)?.name || 'Venda Avulsa'}</div>
+                                                                </td>
+                                                                <td className="px-4 py-5">
+                                                                    <div className="text-sm text-gray-600 font-bold">{resellers.find(r => r.id === s.reseller_id)?.name || 'Direta'}</div>
+                                                                </td>
+                                                                <td className="px-4 py-5 text-center font-bold">{s.quantity}</td>
+                                                                <td className="px-4 py-5 text-right font-medium text-gray-500 text-[10px] whitespace-nowrap">R$ {s.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="px-4 py-5 text-right font-bold text-red-400 text-[10px] whitespace-nowrap">
+                                                                    - R$ {(s.discount_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    <span className="block text-[8px] opacity-70">({s.discount_percentage || 0}%) {s.reseller_id ? 'Comissão' : 'Desconto'}</span>
+                                                                </td>
+                                                                <td className="px-4 py-5 text-right font-black text-primary text-sm whitespace-nowrap">R$ {(s.net_amount || s.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                <td className="px-4 py-5 text-center text-xs">
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${s.payment_status === 'paid' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                                        {s.payment_status === 'paid' ? 'Pago' : 'Pendente'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-5">
+                                                                    <div className="flex justify-center space-x-1">
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                const sDate = s.sale_date?.split('T')[0];
+                                                                                const dDate = s.due_date?.split('T')[0];
+                                                                                setSaleForm({ ...s, sale_date: sDate, due_date: dDate });
+                                                                                setIsSaleModalOpen(true);
+                                                                            }}
+                                                                            className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors"
+                                                                        >
+                                                                            <span className="material-symbols-outlined text-xs">edit</span>
+                                                                        </button>
+                                                                        <button onClick={() => handleDeleteSale(s.id)} className="h-7 w-7 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                            <span className="material-symbols-outlined text-xs">delete</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+
+                                        {/* Floating Actions Bar for Sales */}
+                                        {selectedSales.size > 0 && (
+                                            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-md text-white px-8 py-5 rounded-[30px] shadow-2xl z-[150] flex items-center gap-8 border border-white/10 animate-in slide-in-from-bottom-10">
+                                                <div className="flex items-center gap-3 pr-8 border-r border-white/10">
+                                                    <div className="h-10 w-10 bg-primary rounded-2xl flex items-center justify-center font-black text-white">
+                                                        {selectedSales.size}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selecionados</span>
+                                                        <span className="text-sm font-bold">Vendas prontas</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex gap-4">
+                                                    <button
+                                                        onClick={handleBulkDeleteSales}
+                                                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white font-black text-[11px] tracking-widest transition-all"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">delete</span> EXCLUIR
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSelectedSales(new Set())}
+                                                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white font-black text-[11px] tracking-widest transition-all"
+                                                    >
+                                                        CANCELAR
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}
