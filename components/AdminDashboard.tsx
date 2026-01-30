@@ -413,6 +413,24 @@ const AdminDashboard: React.FC = () => {
         };
     }, [sales, financialEntries, products, categories, filterMonth, filterYear, resellers]);
 
+    const inventoryAlerts = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const in15Days = new Date();
+        in15Days.setDate(today.getDate() + 15);
+        in15Days.setHours(23, 59, 59, 999);
+
+        const expired = products.filter(p => p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < today);
+        const expiringSoon = products.filter(p =>
+            p.expiration_date &&
+            new Date(p.expiration_date + 'T00:00:00') >= today &&
+            new Date(p.expiration_date + 'T23:59:59') <= in15Days
+        );
+
+        return { expired, expiringSoon };
+    }, [products]);
+
     const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const formatPercent = (val: number, base: number) => base === 0 ? '0.00%' : `${((val / base) * 100).toFixed(2)}%`;
 
@@ -1894,6 +1912,12 @@ const AdminDashboard: React.FC = () => {
                             >
                                 <span className="material-symbols-outlined mr-3">{getTabIcon(tab)}</span>
                                 <span className="capitalize">{tab === 'clients' ? 'Clientes' : tab === 'inventory' ? 'Estoque' : tab === 'sales' ? 'Vendas' : tab === 'resellers' ? 'Revendedores' : tab === 'finances' ? 'Financeiro' : tab === 'accounts' ? 'Contas / Cartões' : tab === 'categories' ? 'Categorias' : tab === 'dre' ? 'DRE' : tab === 'settings' ? 'Configurações' : 'Dashboard'}</span>
+                                {tab === 'inventory' && (inventoryAlerts.expired.length > 0 || inventoryAlerts.expiringSoon.length > 0) && (
+                                    <div className="ml-auto flex gap-1">
+                                        {inventoryAlerts.expired.length > 0 && <span className="h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>}
+                                        {inventoryAlerts.expiringSoon.length > 0 && <span className="h-2 w-2 bg-amber-500 rounded-full"></span>}
+                                    </div>
+                                )}
                             </button>
                         ))}
                     </nav>
@@ -2181,9 +2205,36 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )}
 
-                {/* Inventory Tab */}
                 {activeTab === 'inventory' && (
                     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300">
+                        {/* Expiration Alerts Banner */}
+                        {(inventoryAlerts.expired.length > 0 || inventoryAlerts.expiringSoon.length > 0) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {inventoryAlerts.expired.length > 0 && (
+                                    <div className="bg-red-50 border border-red-100 rounded-3xl p-6 flex items-start">
+                                        <div className="h-10 w-10 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shrink-0 mr-4">
+                                            <span className="material-symbols-outlined">warning</span>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-red-800 font-black text-sm uppercase tracking-wider">Produtos Vencidos</h4>
+                                            <p className="text-red-600 text-xs mt-1 font-medium">Existem {inventoryAlerts.expired.length} produtos com data de validade ultrapassada no estoque.</p>
+                                        </div>
+                                    </div>
+                                )}
+                                {inventoryAlerts.expiringSoon.length > 0 && (
+                                    <div className="bg-amber-50 border border-amber-100 rounded-3xl p-6 flex items-start">
+                                        <div className="h-10 w-10 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shrink-0 mr-4">
+                                            <span className="material-symbols-outlined">notification_important</span>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-amber-800 font-black text-sm uppercase tracking-wider">Atenção ao Vencimento</h4>
+                                            <p className="text-amber-600 text-xs mt-1 font-medium">{inventoryAlerts.expiringSoon.length} produtos vencem nos próximos 15 dias. Priorize o giro desses itens.</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="bg-white p-8 rounded-3xl border shadow-sm text-center">
                                 <p className="text-xs font-bold text-gray-400 uppercase mb-2">Itens Estocados</p>
@@ -2237,72 +2288,82 @@ const AdminDashboard: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y text-sm text-gray-600">
-                                        {products.map(p => (
-                                            <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-4 py-5">
-                                                    <div className="font-bold text-gray-800 text-xs">{p.name}</div>
-                                                    <div className="text-[9px] text-gray-300 font-mono">{p.id}</div>
-                                                </td>
-                                                <td className="px-4 py-5">
-                                                    <div className="flex space-x-4">
-                                                        <div>
-                                                            <span className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Custo</span>
-                                                            <span className="font-medium text-gray-500 text-xs">R$ {p.cost_price.toLocaleString('pt-BR')}</span>
+                                        {products.map(p => {
+                                            const isExpired = p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < new Date();
+                                            const isExpiringSoon = p.expiration_date && !isExpired && (
+                                                new Date(p.expiration_date + 'T00:00:00') <= new Date(new Date().setDate(new Date().getDate() + 15))
+                                            );
+
+                                            return (
+                                                <tr key={p.id} className={`hover:bg-gray-50/50 transition-colors ${isExpired ? 'bg-red-50/30' : isExpiringSoon ? 'bg-amber-50/30' : ''}`}>
+                                                    <td className="px-4 py-5">
+                                                        <div className="font-bold text-gray-800 text-xs">{p.name}</div>
+                                                        <div className="text-[9px] text-gray-300 font-mono">{p.id}</div>
+                                                    </td>
+                                                    <td className="px-4 py-5">
+                                                        <div className="flex space-x-4">
+                                                            <div>
+                                                                <span className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Custo</span>
+                                                                <span className="font-medium text-gray-500 text-xs">R$ {p.cost_price.toLocaleString('pt-BR')}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Venda</span>
+                                                                <span className="font-black text-green-600 text-xs">R$ {p.price.toLocaleString('pt-BR')}</span>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <span className="block text-[9px] uppercase font-bold text-gray-400 mb-1">Venda</span>
-                                                            <span className="font-black text-green-600 text-xs">R$ {p.price.toLocaleString('pt-BR')}</span>
+                                                    </td>
+                                                    <td className="px-4 py-5 text-center">
+                                                        <div className={`text-[10px] font-black uppercase ${p.expiration_date ? (new Date(p.expiration_date + 'T23:59:59') < new Date() ? 'text-red-500' : isExpiringSoon ? 'text-amber-600' : 'text-gray-500') : 'text-gray-300 italic'}`}>
+                                                            {p.expiration_date ? formatDate(p.expiration_date) : 'Não inf.'}
+                                                            {p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < new Date() && (
+                                                                <span className="block text-[8px] text-red-400 mt-1 animate-pulse">VENCIDO</span>
+                                                            )}
+                                                            {isExpiringSoon && (
+                                                                <span className="block text-[8px] text-amber-500 mt-1">EM BREVE</span>
+                                                            )}
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-5 text-center">
-                                                    <div className={`text-[10px] font-black uppercase ${p.expiration_date ? (new Date(p.expiration_date + 'T23:59:59') < new Date() ? 'text-red-500' : 'text-gray-500') : 'text-gray-300 italic'}`}>
-                                                        {p.expiration_date ? formatDate(p.expiration_date) : 'Não inf.'}
-                                                        {p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < new Date() && (
-                                                            <span className="block text-[8px] text-red-400 mt-1 animate-pulse">VENCIDO</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-5">
-                                                    <div className="flex items-center justify-center space-x-2">
-                                                        <button
-                                                            onClick={() => {
-                                                                setMovementForm({ product_id: p.id, type: 'adjustment', quantity: 1, movement_date: new Date().toLocaleDateString('sv-SE') });
-                                                                setIsMovementModalOpen(true);
-                                                            }}
-                                                            className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all shadow-sm"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[10px] font-bold">remove</span>
-                                                        </button>
-                                                        <span className={`text-xs font-black w-6 text-center ${p.stock_quantity <= 5 ? 'text-red-500' : 'text-gray-800'}`}>{p.stock_quantity}</span>
-                                                        <button
-                                                            onClick={() => {
-                                                                setMovementForm({ product_id: p.id, type: 'purchase', quantity: 1, unit_cost: p.cost_price, movement_date: new Date().toLocaleDateString('sv-SE') });
-                                                                setIsMovementModalOpen(true);
-                                                            }}
-                                                            className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-green-50 hover:text-green-500 transition-all shadow-sm"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[10px] font-bold">add</span>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-5 text-center">
-                                                    {p.stock_quantity === 0 ? <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">Sem Estoque</span> :
-                                                        p.stock_quantity <= 5 ? <span className="bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">Baixo Estoque</span> :
-                                                            <span className="bg-green-100 text-green-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">OK</span>}
-                                                </td>
-                                                <td className="px-4 py-5">
-                                                    <div className="flex justify-center space-x-1">
-                                                        <button onClick={() => { setEditingProduct(p); setIsProductModalOpen(true); }} className="h-7 w-7 text-blue-600 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
-                                                            <span className="material-symbols-outlined text-xs">edit</span>
-                                                        </button>
-                                                        <button onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
-                                                            <span className="material-symbols-outlined text-xs">delete</span>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    </td>
+                                                    <td className="px-4 py-5">
+                                                        <div className="flex items-center justify-center space-x-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setMovementForm({ product_id: p.id, type: 'adjustment', quantity: 1, movement_date: new Date().toLocaleDateString('sv-SE') });
+                                                                    setIsMovementModalOpen(true);
+                                                                }}
+                                                                className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all shadow-sm"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[10px] font-bold">remove</span>
+                                                            </button>
+                                                            <span className={`text-xs font-black w-6 text-center ${p.stock_quantity <= 5 ? 'text-red-500' : 'text-gray-800'}`}>{p.stock_quantity}</span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setMovementForm({ product_id: p.id, type: 'purchase', quantity: 1, unit_cost: p.cost_price, movement_date: new Date().toLocaleDateString('sv-SE') });
+                                                                    setIsMovementModalOpen(true);
+                                                                }}
+                                                                className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-green-50 hover:text-green-500 transition-all shadow-sm"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[10px] font-bold">add</span>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-5 text-center">
+                                                        {p.stock_quantity === 0 ? <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">Sem Estoque</span> :
+                                                            p.stock_quantity <= 5 ? <span className="bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">Baixo Estoque</span> :
+                                                                <span className="bg-green-100 text-green-600 px-2 py-0.5 rounded-full text-[8px] font-black uppercase whitespace-nowrap">OK</span>}
+                                                    </td>
+                                                    <td className="px-4 py-5">
+                                                        <div className="flex justify-center space-x-1">
+                                                            <button onClick={() => { setEditingProduct(p); setIsProductModalOpen(true); }} className="h-7 w-7 text-blue-600 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                <span className="material-symbols-outlined text-xs">edit</span>
+                                                            </button>
+                                                            <button onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                <span className="material-symbols-outlined text-xs">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
