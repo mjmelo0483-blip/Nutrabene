@@ -27,6 +27,19 @@ interface ProductInventory {
     stock_quantity: number;
     price: number;
     cost_price: number;
+    initial_stock?: number;
+    initial_stock_date?: string;
+}
+
+interface InventoryMovement {
+    id: string;
+    product_id: string;
+    type: 'purchase' | 'adjustment' | 'sale' | 'initial';
+    quantity: number;
+    unit_cost?: number;
+    reason?: string;
+    movement_date: string;
+    created_at?: string;
 }
 
 interface Reseller {
@@ -125,9 +138,9 @@ const AdminDashboard: React.FC = () => {
     const [sales, setSales] = useState<Sale[]>([]);
     const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
     const [categories, setCategories] = useState<FinancialCategory[]>([]);
+    const [movements, setMovements] = useState<InventoryMovement[]>([]);
 
     const [uploading, setUploading] = useState(false);
-    const [updatingStock, setUpdatingStock] = useState<string | null>(null);
     const [dataError, setDataError] = useState('');
 
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -177,6 +190,14 @@ const AdminDashboard: React.FC = () => {
 
     const [isResellerModalOpen, setIsResellerModalOpen] = useState(false);
     const [resellerForm, setResellerForm] = useState<Partial<Reseller>>({ commission_rate: 20 });
+
+    const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
+    const [movementForm, setMovementForm] = useState<Partial<InventoryMovement>>({
+        type: 'purchase',
+        quantity: 0,
+        unit_cost: 0,
+        movement_date: new Date().toLocaleDateString('sv-SE')
+    });
 
     const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
     const [selectedResellerForClosing, setSelectedResellerForClosing] = useState<Reseller | null>(null);
@@ -394,7 +415,8 @@ const AdminDashboard: React.FC = () => {
                 { data: fin },
                 { data: sls },
                 { data: cards },
-                { data: cats }
+                { data: cats },
+                { data: data_movements }
             ] = await Promise.all([
                 supabase.from('registrations').select('*').order('created_at', { ascending: false }),
                 supabase.from('reminder_settings').select('message_template, media_url').eq('key', 'default').single(),
@@ -404,7 +426,8 @@ const AdminDashboard: React.FC = () => {
                 supabase.from('financial_entries').select('*').order('due_date', { ascending: true }),
                 supabase.from('sales').select('*').order('sale_date', { ascending: false }),
                 supabase.from('credit_cards').select('*').order('name'),
-                supabase.from('financial_categories').select('*').order('name')
+                supabase.from('financial_categories').select('*').order('name'),
+                supabase.from('inventory_movements').select('*').order('movement_date', { ascending: false })
             ]);
 
             if (regs) setRegistrations(regs);
@@ -416,6 +439,7 @@ const AdminDashboard: React.FC = () => {
             if (sls) setSales(sls);
             if (cards) setCreditCards(cards);
             if (cats) setCategories(cats);
+            if (data_movements) setMovements(data_movements);
         } catch (err) {
             console.error(err);
             setDataError('Erro ao sincronizar dados com o servidor.');
@@ -467,14 +491,6 @@ const AdminDashboard: React.FC = () => {
     }
 
     // --- Product/Stock Handlers ---
-    async function handleUpdateStock(id: string, newQuantity: number) {
-        if (newQuantity < 0) return;
-        setUpdatingStock(id);
-        const { error } = await supabase.from('products').update({ stock_quantity: newQuantity }).eq('id', id);
-        if (error) showNotification(`Erro ao atualizar estoque: ${error.message}`, 'error');
-        else setProducts(products.map(p => p.id === id ? { ...p, stock_quantity: newQuantity } : p));
-        setUpdatingStock(null);
-    }
 
     async function handleSaveProduct(e: React.FormEvent) {
         e.preventDefault();
@@ -491,7 +507,12 @@ const AdminDashboard: React.FC = () => {
             const { error: updError } = await supabase.from('products').update(updateData).eq('id', id);
             error = updError;
         } else {
-            const { error: insError } = await supabase.from('products').insert([editingProduct]);
+            // No cadastro de novo produto, o estoque inicial reflete no estoque atual
+            const newProduct = {
+                ...editingProduct,
+                stock_quantity: editingProduct.initial_stock || 0
+            };
+            const { error: insError } = await supabase.from('products').insert([newProduct]);
             error = insError;
         }
 
@@ -501,6 +522,61 @@ const AdminDashboard: React.FC = () => {
             setIsProductModalOpen(false);
             setEditingProduct(null);
             fetchData();
+        }
+    }
+
+    async function handleSaveMovement(e: React.FormEvent) {
+        e.preventDefault();
+        if (!movementForm.product_id || (movementForm.quantity || 0) <= 0) {
+            showNotification('Preencha os campos obrigatórios!', 'error');
+            return;
+        }
+
+        const product = products.find(p => p.id === movementForm.product_id);
+        if (!product) return;
+
+        setLoading(true);
+        try {
+            let newStock = product.stock_quantity;
+            let newCost = product.cost_price;
+
+            if (movementForm.type === 'purchase') {
+                const purchaseQty = movementForm.quantity || 0;
+                const unitCost = movementForm.unit_cost || 0;
+
+                // Cálculo de Custo Médio Ponderado (WAC)
+                // Novo Custo = (Estoque Atual * Custo Atual + Qtd Comprada * Custo Unitário) / (Estoque Atual + Qtd Comprada)
+                const currentTotalValue = product.stock_quantity * product.cost_price;
+                const purchaseTotalValue = purchaseQty * unitCost;
+                newStock = product.stock_quantity + purchaseQty;
+                newCost = (currentTotalValue + purchaseTotalValue) / newStock;
+            } else if (movementForm.type === 'adjustment') {
+                const adjQty = movementForm.quantity || 0;
+                if (adjQty > product.stock_quantity) {
+                    throw new Error('Quantidade de baixa superior ao estoque disponível.');
+                }
+                newStock = product.stock_quantity - adjQty;
+                // O custo médio não muda na baixa
+            }
+
+            // 1. Inserir movimentação
+            const { error: movError } = await supabase.from('inventory_movements').insert([movementForm]);
+            if (movError) throw movError;
+
+            // 2. Atualizar produto
+            const { error: prodError } = await supabase.from('products').update({
+                stock_quantity: newStock,
+                cost_price: newCost
+            }).eq('id', product.id);
+            if (prodError) throw prodError;
+
+            showNotification('Movimentação registrada com sucesso!');
+            setIsMovementModalOpen(false);
+            fetchData();
+        } catch (err: any) {
+            showNotification(err.message, 'error');
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -1724,12 +1800,28 @@ const AdminDashboard: React.FC = () => {
                         <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
                             <div className="p-8 border-b flex justify-between items-center">
                                 <h2 className="text-xl font-bold">Catálogo de Produtos</h2>
-                                <button
-                                    onClick={() => { setEditingProduct({ stock_quantity: 0, price: 0, cost_price: 0 }); setIsProductModalOpen(true); }}
-                                    className="bg-primary text-white px-6 py-3 rounded-2xl font-bold flex items-center shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
-                                >
-                                    <span className="material-symbols-outlined mr-2">add_box</span> Novo Produto
-                                </button>
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => {
+                                            setMovementForm({
+                                                type: 'purchase',
+                                                quantity: 0,
+                                                unit_cost: 0,
+                                                movement_date: new Date().toLocaleDateString('sv-SE')
+                                            });
+                                            setIsMovementModalOpen(true);
+                                        }}
+                                        className="bg-gray-100 text-gray-700 px-6 py-3 rounded-2xl font-bold flex items-center shadow-sm hover:bg-gray-200 transition-all"
+                                    >
+                                        <span className="material-symbols-outlined mr-2">swap_vert</span> Movimentar Estoque
+                                    </button>
+                                    <button
+                                        onClick={() => { setEditingProduct({ stock_quantity: 0, price: 0, cost_price: 0, initial_stock: 0, initial_stock_date: new Date().toLocaleDateString('sv-SE') }); setIsProductModalOpen(true); }}
+                                        className="bg-primary text-white px-6 py-3 rounded-2xl font-bold flex items-center shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+                                    >
+                                        <span className="material-symbols-outlined mr-2">add_box</span> Novo Produto
+                                    </button>
+                                </div>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full">
@@ -1763,11 +1855,23 @@ const AdminDashboard: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-5">
                                                     <div className="flex items-center justify-center space-x-2">
-                                                        <button onClick={() => handleUpdateStock(p.id, p.stock_quantity - 1)} disabled={updatingStock === p.id} className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all shadow-sm">
+                                                        <button
+                                                            onClick={() => {
+                                                                setMovementForm({ product_id: p.id, type: 'adjustment', quantity: 1, movement_date: new Date().toLocaleDateString('sv-SE') });
+                                                                setIsMovementModalOpen(true);
+                                                            }}
+                                                            className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all shadow-sm"
+                                                        >
                                                             <span className="material-symbols-outlined text-[10px] font-bold">remove</span>
                                                         </button>
                                                         <span className={`text-xs font-black w-6 text-center ${p.stock_quantity <= 5 ? 'text-red-500' : 'text-gray-800'}`}>{p.stock_quantity}</span>
-                                                        <button onClick={() => handleUpdateStock(p.id, p.stock_quantity + 1)} disabled={updatingStock === p.id} className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-green-50 hover:text-green-500 transition-all shadow-sm">
+                                                        <button
+                                                            onClick={() => {
+                                                                setMovementForm({ product_id: p.id, type: 'purchase', quantity: 1, unit_cost: p.cost_price, movement_date: new Date().toLocaleDateString('sv-SE') });
+                                                                setIsMovementModalOpen(true);
+                                                            }}
+                                                            className="h-6 w-6 rounded-lg border flex items-center justify-center hover:bg-green-50 hover:text-green-500 transition-all shadow-sm"
+                                                        >
                                                             <span className="material-symbols-outlined text-[10px] font-bold">add</span>
                                                         </button>
                                                     </div>
@@ -3782,7 +3886,7 @@ const AdminDashboard: React.FC = () => {
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
                         <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
                             <div className="flex justify-between items-center mb-10">
-                                <h2 className="text-3xl font-black text-gray-800">{editingProduct?.id ? 'Configurar SKU' : 'Novo SKU'}</h2>
+                                <h2 className="text-3xl font-black text-gray-800">{editingProduct?.id && products.some(p => p.id === editingProduct.id) ? 'Configurar SKU' : 'Novo SKU'}</h2>
                                 <button onClick={() => setIsProductModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
                                     <span className="material-symbols-outlined">close</span>
                                 </button>
@@ -3790,6 +3894,7 @@ const AdminDashboard: React.FC = () => {
                             <form onSubmit={handleSaveProduct} className="space-y-6">
                                 <input type="text" value={editingProduct?.id || ''} onChange={e => setEditingProduct({ ...editingProduct, id: e.target.value })} placeholder="ID Único / SKU (ex: ltn-200ml)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all disabled:opacity-30" disabled={!!editingProduct?.id && products.some(p => p.id === editingProduct.id)} required />
                                 <input type="text" value={editingProduct?.name || ''} onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })} placeholder="Nome Comercial do Produto" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <label className="block">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Custo Unitário (R$)</span>
@@ -3800,10 +3905,28 @@ const AdminDashboard: React.FC = () => {
                                         <input type="number" step="0.01" value={editingProduct?.price || 0} onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                     </label>
                                 </div>
-                                <label className="block">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Estoque Físico Disponível</span>
-                                    <input type="number" value={editingProduct?.stock_quantity || 0} onChange={e => setEditingProduct({ ...editingProduct, stock_quantity: parseInt(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                                </label>
+
+                                {(!editingProduct?.id || !products.some(p => p.id === editingProduct.id)) && (
+                                    <div className="grid grid-cols-2 gap-4 p-6 bg-blue-50/50 rounded-3xl border border-blue-100">
+                                        <label className="block">
+                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Estoque Inicial</span>
+                                            <input type="number" value={editingProduct?.initial_stock || 0} onChange={e => setEditingProduct({ ...editingProduct, initial_stock: parseInt(e.target.value) })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Data Inicial</span>
+                                            <input type="date" value={editingProduct?.initial_stock_date || ''} onChange={e => setEditingProduct({ ...editingProduct, initial_stock_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
+                                        </label>
+                                    </div>
+                                )}
+
+                                {editingProduct?.id && products.some(p => p.id === editingProduct.id) && (
+                                    <label className="block">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Estoque Atual (Somente Visualização)</span>
+                                        <input type="number" value={editingProduct?.stock_quantity || 0} className="w-full p-5 border-none rounded-2xl bg-gray-100 mt-1" disabled />
+                                        <p className="text-[10px] text-gray-400 mt-2 px-4 italic">* Para alterar o estoque use o botão "Movimentar Estoque"</p>
+                                    </label>
+                                )}
+
                                 <div className="flex space-x-6 pt-6">
                                     <button type="button" onClick={() => setIsProductModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Voltar</button>
                                     <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Confirmar Registro</button>
@@ -3813,6 +3936,84 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )
             }
+
+            {/* Stock Movement Modal */}
+            {isMovementModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-10">
+                            <h2 className="text-3xl font-black text-gray-800">Movimentar Estoque</h2>
+                            <button onClick={() => setIsMovementModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveMovement} className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Produto</label>
+                                <select
+                                    value={movementForm.product_id || ''}
+                                    onChange={e => setMovementForm({ ...movementForm, product_id: e.target.value })}
+                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none appearance-none cursor-pointer"
+                                    required
+                                >
+                                    <option value="">Selecione o Produto</option>
+                                    {products.map(p => <option key={p.id} value={p.id}>{p.name} (Saldo: {p.stock_quantity})</option>)}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <button type="button" onClick={() => setMovementForm({ ...movementForm, type: 'purchase' })} className={`py-4 rounded-2xl font-black transition-all ${movementForm.type === 'purchase' ? 'bg-primary text-white shadow-lg' : 'bg-gray-50 text-gray-400'}`}>
+                                    🛒 COMPRA
+                                </button>
+                                <button type="button" onClick={() => setMovementForm({ ...movementForm, type: 'adjustment' })} className={`py-4 rounded-2xl font-black transition-all ${movementForm.type === 'adjustment' ? 'bg-red-500 text-white shadow-lg' : 'bg-gray-50 text-gray-400'}`}>
+                                    📉 BAIXA
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className="block">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Quantidade</span>
+                                    <input type="number" min="1" value={movementForm.quantity || 0} onChange={e => setMovementForm({ ...movementForm, quantity: parseInt(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none" required />
+                                </label>
+                                <label className="block">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data</span>
+                                    <input type="date" value={movementForm.movement_date || ''} onChange={e => setMovementForm({ ...movementForm, movement_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none" required />
+                                </label>
+                            </div>
+
+                            {movementForm.type === 'purchase' ? (
+                                <div className="space-y-2 animate-in slide-in-from-top-2">
+                                    <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-4">Custo Unitário da Compra (R$)</label>
+                                    <input type="number" step="0.01" value={movementForm.unit_cost || 0} onChange={e => setMovementForm({ ...movementForm, unit_cost: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-primary/5 focus:bg-white focus:ring-4 ring-primary/10 outline-none font-bold text-primary" placeholder="0,00" required={movementForm.type === 'purchase'} />
+                                    <p className="text-[10px] text-gray-400 px-4 mt-2 italic">* O custo médio do produto será recalculado automaticamente.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2 animate-in slide-in-from-top-2">
+                                    <label className="text-[10px] font-black text-red-500 uppercase tracking-widest ml-4">Motivo da Baixa</label>
+                                    <select
+                                        value={movementForm.reason || ''}
+                                        onChange={e => setMovementForm({ ...movementForm, reason: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-red-50 focus:bg-white focus:ring-4 ring-red-100 outline-none appearance-none cursor-pointer"
+                                        required={movementForm.type === 'adjustment'}
+                                    >
+                                        <option value="">Selecione o Motivo</option>
+                                        <option value="perda">Perda / Avaria</option>
+                                        <option value="uso_proprio">Uso Próprio</option>
+                                        <option value="brinde">Brinde / Amostra</option>
+                                        <option value="vencimento">Vencimento</option>
+                                        <option value="outro">Outro</option>
+                                    </select>
+                                </div>
+                            )}
+
+                            <div className="flex space-x-6 pt-6">
+                                <button type="button" onClick={() => setIsMovementModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Cancelar</button>
+                                <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Registrar Movimentação</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {
                 isSaleModalOpen && (
