@@ -895,6 +895,9 @@ const AdminDashboard: React.FC = () => {
             return;
         }
 
+        // Helper to format numbers with 2 decimal places
+        const formatNum = (value: number) => parseFloat((value || 0).toFixed(2));
+
         const data = filteredSales.map(s => ({
             'Data Venda': formatDate(s.sale_date),
             'Data Vencimento': formatDate(s.due_date),
@@ -902,10 +905,10 @@ const AdminDashboard: React.FC = () => {
             'Cliente': registrations.find(c => c.id === s.client_id)?.name || '-',
             'Vendedor': resellers.find(r => r.id === s.reseller_id)?.name || 'Venda Direta',
             'Qtd': s.quantity,
-            'Valor Unit.': s.unit_price,
-            'Total Bruto': s.total_price,
-            'Desconto/Comissão': s.discount_amount,
-            'Líquido': s.net_amount,
+            'Valor Unit.': formatNum(s.unit_price),
+            'Total Bruto': formatNum(s.total_price),
+            'Desconto/Comissão': formatNum(s.discount_amount),
+            'Líquido': formatNum(s.net_amount),
             'Status': s.payment_status === 'paid' ? 'Pago' : s.payment_status === 'pending' ? 'Pendente' : 'Atrasado'
         }));
 
@@ -918,9 +921,9 @@ const AdminDashboard: React.FC = () => {
             'Vendedor': 'TOTAIS',
             'Qtd': filteredSales.reduce((acc, s) => acc + s.quantity, 0),
             'Valor Unit.': '',
-            'Total Bruto': filteredSales.reduce((acc, s) => acc + (s.total_price || 0), 0),
-            'Desconto/Comissão': filteredSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0),
-            'Líquido': filteredSales.reduce((acc, s) => acc + (s.net_amount || 0), 0),
+            'Total Bruto': formatNum(filteredSales.reduce((acc, s) => acc + (s.total_price || 0), 0)),
+            'Desconto/Comissão': formatNum(filteredSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0)),
+            'Líquido': formatNum(filteredSales.reduce((acc, s) => acc + (s.net_amount || 0), 0)),
             'Status': ''
         };
         data.push(totals);
@@ -943,73 +946,160 @@ const AdminDashboard: React.FC = () => {
 
         const doc = new jsPDF('landscape');
 
-        // Header
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Relatório de Vendas - Nutrabene', 14, 20);
+        // Load and add logo
+        const logoUrl = '/assets/logo.png';
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.src = logoUrl;
 
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 28);
+        img.onload = () => {
+            // Add logo
+            doc.addImage(img, 'PNG', 14, 8, 30, 30);
 
-        // Filters info
-        let filterInfo = 'Filtros: ';
-        if (salesFilters.startDate) filterInfo += `De ${formatDate(salesFilters.startDate)} `;
-        if (salesFilters.endDate) filterInfo += `Até ${formatDate(salesFilters.endDate)} `;
-        if (salesFilters.productId) filterInfo += `| Produto: ${products.find(p => p.id === salesFilters.productId)?.name} `;
-        if (salesFilters.resellerId) filterInfo += `| Vendedor: ${resellers.find(r => r.id === salesFilters.resellerId)?.name} `;
-        if (salesFilters.status) filterInfo += `| Status: ${salesFilters.status === 'paid' ? 'Pago' : 'Pendente'} `;
-        if (filterInfo === 'Filtros: ') filterInfo = 'Filtros: Todos';
-        doc.setFontSize(8);
-        doc.text(filterInfo, 14, 34);
+            // Header - positioned after logo
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Relatório de Vendas', 50, 18);
 
-        // Table data
-        const tableData = filteredSales.map(s => [
-            formatDate(s.sale_date),
-            formatDate(s.due_date),
-            products.find(p => p.id === s.product_id)?.name || '-',
-            resellers.find(r => r.id === s.reseller_id)?.name || 'Direta',
-            s.quantity.toString(),
-            `R$ ${(s.total_price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `R$ ${(s.discount_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `R$ ${(s.net_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            s.payment_status === 'paid' ? 'Pago' : 'Pendente'
-        ]);
+            doc.setFontSize(11);
+            doc.setTextColor(100, 100, 100);
+            doc.text('Nutrabene - Nutrição Inteligente', 50, 26);
 
-        // Add totals
-        const totalBruto = filteredSales.reduce((acc, s) => acc + (s.total_price || 0), 0);
-        const totalDesconto = filteredSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
-        const totalLiquido = filteredSales.reduce((acc, s) => acc + (s.net_amount || 0), 0);
-        const totalQtd = filteredSales.reduce((acc, s) => acc + s.quantity, 0);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 50, 34);
 
-        tableData.push([
-            '', '', '', 'TOTAIS',
-            totalQtd.toString(),
-            `R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `R$ ${totalDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            ''
-        ]);
+            // Filters info
+            let filterInfo = 'Filtros: ';
+            if (salesFilters.startDate) filterInfo += `De ${formatDate(salesFilters.startDate)} `;
+            if (salesFilters.endDate) filterInfo += `Até ${formatDate(salesFilters.endDate)} `;
+            if (salesFilters.productId) filterInfo += `| Produto: ${products.find(p => p.id === salesFilters.productId)?.name} `;
+            if (salesFilters.resellerId) filterInfo += `| Vendedor: ${resellers.find(r => r.id === salesFilters.resellerId)?.name} `;
+            if (salesFilters.status) filterInfo += `| Status: ${salesFilters.status === 'paid' ? 'Pago' : 'Pendente'} `;
+            if (filterInfo === 'Filtros: ') filterInfo = 'Filtros: Todos';
+            doc.setFontSize(8);
+            doc.text(filterInfo, 14, 44);
 
-        autoTable(doc, {
-            startY: 40,
-            head: [['Data Venda', 'Vencimento', 'Produto', 'Vendedor', 'Qtd', 'Bruto', 'Desc/Com', 'Líquido', 'Status']],
-            body: tableData,
-            styles: { fontSize: 8, cellPadding: 2 },
-            headStyles: { fillColor: [99, 102, 241], fontStyle: 'bold' },
-            alternateRowStyles: { fillColor: [248, 250, 252] },
-            foot: [],
-            didParseCell: function (data) {
-                // Style totals row
-                if (data.row.index === tableData.length - 1) {
-                    data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.fillColor = [226, 232, 240];
+            // Helper function for currency formatting
+            const formatCurrency = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
+
+            // Table data
+            const tableData = filteredSales.map(s => [
+                formatDate(s.sale_date),
+                formatDate(s.due_date),
+                products.find(p => p.id === s.product_id)?.name || '-',
+                resellers.find(r => r.id === s.reseller_id)?.name || 'Direta',
+                s.quantity.toString(),
+                formatCurrency(s.total_price || 0),
+                formatCurrency(s.discount_amount || 0),
+                formatCurrency(s.net_amount || 0),
+                s.payment_status === 'paid' ? 'Pago' : 'Pendente'
+            ]);
+
+            // Add totals
+            const totalBruto = filteredSales.reduce((acc, s) => acc + (s.total_price || 0), 0);
+            const totalDesconto = filteredSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+            const totalLiquido = filteredSales.reduce((acc, s) => acc + (s.net_amount || 0), 0);
+            const totalQtd = filteredSales.reduce((acc, s) => acc + s.quantity, 0);
+
+            tableData.push([
+                '', '', '', 'TOTAIS',
+                totalQtd.toString(),
+                formatCurrency(totalBruto),
+                formatCurrency(totalDesconto),
+                formatCurrency(totalLiquido),
+                ''
+            ]);
+
+            autoTable(doc, {
+                startY: 50,
+                head: [['Data Venda', 'Vencimento', 'Produto', 'Vendedor', 'Qtd', 'Bruto', 'Desc/Com', 'Líquido', 'Status']],
+                body: tableData,
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [139, 169, 130], fontStyle: 'bold' }, // Verde da marca
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                foot: [],
+                didParseCell: function (data) {
+                    // Style totals row
+                    if (data.row.index === tableData.length - 1) {
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.fillColor = [226, 232, 240];
+                    }
                 }
-            }
-        });
+            });
 
-        doc.save(`vendas_${new Date().toISOString().split('T')[0]}.pdf`);
-        showNotification(`Exportado ${filteredSales.length} vendas para PDF!`);
+            doc.save(`vendas_${new Date().toISOString().split('T')[0]}.pdf`);
+            showNotification(`Exportado ${filteredSales.length} vendas para PDF!`);
+        };
+
+        img.onerror = () => {
+            // Fallback without logo
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Relatório de Vendas - Nutrabene', 14, 20);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 28);
+
+            let filterInfo = 'Filtros: ';
+            if (salesFilters.startDate) filterInfo += `De ${formatDate(salesFilters.startDate)} `;
+            if (salesFilters.endDate) filterInfo += `Até ${formatDate(salesFilters.endDate)} `;
+            if (salesFilters.productId) filterInfo += `| Produto: ${products.find(p => p.id === salesFilters.productId)?.name} `;
+            if (salesFilters.resellerId) filterInfo += `| Vendedor: ${resellers.find(r => r.id === salesFilters.resellerId)?.name} `;
+            if (salesFilters.status) filterInfo += `| Status: ${salesFilters.status === 'paid' ? 'Pago' : 'Pendente'} `;
+            if (filterInfo === 'Filtros: ') filterInfo = 'Filtros: Todos';
+            doc.setFontSize(8);
+            doc.text(filterInfo, 14, 34);
+
+            const formatCurrency = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
+
+            const tableData = filteredSales.map(s => [
+                formatDate(s.sale_date),
+                formatDate(s.due_date),
+                products.find(p => p.id === s.product_id)?.name || '-',
+                resellers.find(r => r.id === s.reseller_id)?.name || 'Direta',
+                s.quantity.toString(),
+                formatCurrency(s.total_price || 0),
+                formatCurrency(s.discount_amount || 0),
+                formatCurrency(s.net_amount || 0),
+                s.payment_status === 'paid' ? 'Pago' : 'Pendente'
+            ]);
+
+            const totalBruto = filteredSales.reduce((acc, s) => acc + (s.total_price || 0), 0);
+            const totalDesconto = filteredSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+            const totalLiquido = filteredSales.reduce((acc, s) => acc + (s.net_amount || 0), 0);
+            const totalQtd = filteredSales.reduce((acc, s) => acc + s.quantity, 0);
+
+            tableData.push([
+                '', '', '', 'TOTAIS',
+                totalQtd.toString(),
+                formatCurrency(totalBruto),
+                formatCurrency(totalDesconto),
+                formatCurrency(totalLiquido),
+                ''
+            ]);
+
+            autoTable(doc, {
+                startY: 40,
+                head: [['Data Venda', 'Vencimento', 'Produto', 'Vendedor', 'Qtd', 'Bruto', 'Desc/Com', 'Líquido', 'Status']],
+                body: tableData,
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [139, 169, 130], fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                foot: [],
+                didParseCell: function (data) {
+                    if (data.row.index === tableData.length - 1) {
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.fillColor = [226, 232, 240];
+                    }
+                }
+            });
+
+            doc.save(`vendas_${new Date().toISOString().split('T')[0]}.pdf`);
+            showNotification(`Exportado ${filteredSales.length} vendas para PDF!`);
+        };
     }
 
     // --- Financial Handlers ---
