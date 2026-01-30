@@ -205,6 +205,8 @@ const AdminDashboard: React.FC = () => {
         search: ''
     });
 
+    const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+
     const [hoveredProduct, setHoveredProduct] = useState<any>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -791,8 +793,90 @@ const AdminDashboard: React.FC = () => {
                 if (error) showNotification(`Erro ao excluir lançamento: ${error.message}`, 'error');
                 else {
                     showNotification('Lançamento financeiro removido.');
+                    setSelectedEntries(prev => {
+                        const next = new Set(prev);
+                        next.delete(id);
+                        return next;
+                    });
                     fetchData();
                 }
+            }
+        );
+    }
+
+    async function handleBulkDelete() {
+        if (selectedEntries.size === 0) return;
+        askConfirmation(
+            'Excluir Lançamentos',
+            `Deseja excluir permanentemente os ${selectedEntries.size} lançamentos selecionados?`,
+            async () => {
+                const { error } = await supabase.from('financial_entries').delete().in('id', Array.from(selectedEntries));
+                if (error) showNotification(`Erro ao excluir: ${error.message}`, 'error');
+                else {
+                    showNotification(`${selectedEntries.size} lançamentos excluídos com sucesso!`);
+                    setSelectedEntries(new Set());
+                    fetchData();
+                }
+            }
+        );
+    }
+
+    async function handleBulkMarkAsPaid() {
+        if (selectedEntries.size === 0) return;
+
+        const entriesToUpdate = financialEntries.filter(e => selectedEntries.has(e.id) && e.status !== 'paid');
+        if (entriesToUpdate.length === 0) {
+            showNotification('Nenhum lançamento pendente selecionado.', 'error');
+            return;
+        }
+
+        askConfirmation(
+            'Liquidar Lançamentos',
+            `Deseja marcar como pago os ${entriesToUpdate.length} lançamentos pendentes selecionados?`,
+            async () => {
+                let successCount = 0;
+                let errorCount = 0;
+
+                // Clone bank accounts to track local balance changes during the loop
+                const localBankBalances = new Map<string, number>(bankAccounts.map(b => [b.id, b.balance]));
+
+                for (const entry of entriesToUpdate) {
+                    try {
+                        const bankId = entry.bank_account_id || bankAccounts[0]?.id;
+                        if (!bankId) throw new Error('Conta bancária não configurada');
+
+                        const currentBalance = localBankBalances.get(bankId);
+                        if (currentBalance === undefined) throw new Error('Conta bancária não encontrada');
+
+                        const newBalance = entry.type === 'receivable' ? currentBalance + entry.amount : currentBalance - entry.amount;
+
+                        // Update bank in DB
+                        const { error: bankErr } = await supabase.from('bank_accounts').update({ balance: newBalance }).eq('id', bankId);
+                        if (bankErr) throw bankErr;
+
+                        // Update local tracker
+                        localBankBalances.set(bankId, newBalance);
+
+                        // Update entry in DB
+                        const { error: entryErr } = await supabase.from('financial_entries').update({
+                            status: 'paid',
+                            payment_date: new Date().toISOString().split('T')[0],
+                            bank_account_id: bankId
+                        }).eq('id', entry.id);
+
+                        if (entryErr) throw entryErr;
+                        successCount++;
+                    } catch (err) {
+                        console.error(err);
+                        errorCount++;
+                    }
+                }
+
+                if (successCount > 0) showNotification(`${successCount} lançamentos liquidados com sucesso!`);
+                if (errorCount > 0) showNotification(`${errorCount} erros ao liquidar.`, 'error');
+
+                setSelectedEntries(new Set());
+                fetchData();
             }
         );
     }
@@ -1223,7 +1307,7 @@ const AdminDashboard: React.FC = () => {
                         {['dashboard', 'clients', 'inventory', 'sales', 'resellers', 'finances', 'accounts', 'categories', 'dre', 'settings'].map((tab) => (
                             <button
                                 key={tab}
-                                onClick={() => setActiveTab(tab as any)}
+                                onClick={() => { setActiveTab(tab as any); setSelectedEntries(new Set()); }}
                                 className={`w-full flex items-center px-4 py-4 rounded-xl font-bold text-sm transition-all ${activeTab === tab ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'}`}
                             >
                                 <span className="material-symbols-outlined mr-3">{getTabIcon(tab)}</span>
@@ -1935,22 +2019,56 @@ const AdminDashboard: React.FC = () => {
                                                             <table className="w-full text-xs">
                                                                 <thead>
                                                                     <tr className="text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
-                                                                        <th className="px-8 py-3">Data</th>
-                                                                        <th className="px-8 py-3">Descrição</th>
-                                                                        <th className="px-8 py-3">Conta</th>
-                                                                        <th className="px-8 py-3 text-right">Valor</th>
-                                                                        <th className="px-8 py-3 text-center">Ação</th>
+                                                                        <th className="px-4 py-3 text-center w-10">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={group.entries.every((e: any) => selectedEntries.has(e.id)) && group.entries.length > 0}
+                                                                                onChange={() => {
+                                                                                    const ids = group.entries.map((e: any) => e.id);
+                                                                                    const allSelected = ids.every((id: string) => selectedEntries.has(id));
+                                                                                    setSelectedEntries(prev => {
+                                                                                        const next = new Set(prev);
+                                                                                        ids.forEach((id: string) => allSelected ? next.delete(id) : next.add(id));
+                                                                                        return next;
+                                                                                    });
+                                                                                }}
+                                                                                className="rounded border-gray-300 text-primary focus:ring-primary h-3 w-3"
+                                                                            />
+                                                                        </th>
+                                                                        <th className="px-4 py-3">Data</th>
+                                                                        <th className="px-4 py-3">Descrição</th>
+                                                                        <th className="px-4 py-3">Conta</th>
+                                                                        <th className="px-4 py-3 text-right">Valor</th>
+                                                                        <th className="px-4 py-3 text-center">Ações</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody className="divide-y divide-gray-100/50">
                                                                     {group.entries.map((e: any) => (
-                                                                        <tr key={e.id} className="hover:bg-white transition-colors">
-                                                                            <td className="px-8 py-4 font-bold text-gray-400">{formatDate(e.due_date)}</td>
-                                                                            <td className="px-8 py-4 font-black text-gray-700">{e.description}</td>
-                                                                            <td className="px-8 py-4 font-bold text-gray-400">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || 'N/A'}</td>
-                                                                            <td className="px-8 py-4 text-right font-black text-green-600">R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                                                            <td className="px-8 py-4 text-center">
-                                                                                <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
+                                                                        <tr key={e.id} className={`hover:bg-white transition-colors ${selectedEntries.has(e.id) ? 'bg-primary/5' : ''}`}>
+                                                                            <td className="px-4 py-4 text-center">
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={selectedEntries.has(e.id)}
+                                                                                    onChange={() => {
+                                                                                        setSelectedEntries(prev => {
+                                                                                            const next = new Set(prev);
+                                                                                            if (next.has(e.id)) next.delete(e.id);
+                                                                                            else next.add(e.id);
+                                                                                            return next;
+                                                                                        });
+                                                                                    }}
+                                                                                    className="rounded border-gray-300 text-primary focus:ring-primary h-3 w-3"
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-4 py-4 font-bold text-gray-400">{formatDate(e.due_date)}</td>
+                                                                            <td className="px-4 py-4 font-black text-gray-700">{e.description}</td>
+                                                                            <td className="px-4 py-4 font-bold text-gray-400">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || 'N/A'}</td>
+                                                                            <td className="px-4 py-4 text-right font-black text-green-600">R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                                            <td className="px-4 py-4 text-center">
+                                                                                <div className="flex items-center justify-center gap-2">
+                                                                                    <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
+                                                                                    <button onClick={() => handleDeleteFinancial(e.id)} className="text-red-400 hover:text-red-500"><span className="material-symbols-outlined text-xs">delete</span></button>
+                                                                                </div>
                                                                             </td>
                                                                         </tr>
                                                                     ))}
@@ -2005,22 +2123,56 @@ const AdminDashboard: React.FC = () => {
                                                             <table className="w-full text-xs">
                                                                 <thead>
                                                                     <tr className="text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
-                                                                        <th className="px-8 py-3">Data</th>
-                                                                        <th className="px-8 py-3">Descrição</th>
-                                                                        <th className="px-8 py-3">Conta</th>
-                                                                        <th className="px-8 py-3 text-right">Valor</th>
-                                                                        <th className="px-8 py-3 text-center">Ação</th>
+                                                                        <th className="px-4 py-3 text-center w-10">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={group.entries.every((e: any) => selectedEntries.has(e.id)) && group.entries.length > 0}
+                                                                                onChange={() => {
+                                                                                    const ids = group.entries.map((e: any) => e.id);
+                                                                                    const allSelected = ids.every((id: string) => selectedEntries.has(id));
+                                                                                    setSelectedEntries(prev => {
+                                                                                        const next = new Set(prev);
+                                                                                        ids.forEach((id: string) => allSelected ? next.delete(id) : next.add(id));
+                                                                                        return next;
+                                                                                    });
+                                                                                }}
+                                                                                className="rounded border-gray-300 text-primary focus:ring-primary h-3 w-3"
+                                                                            />
+                                                                        </th>
+                                                                        <th className="px-4 py-3">Data</th>
+                                                                        <th className="px-4 py-3">Descrição</th>
+                                                                        <th className="px-4 py-3">Conta</th>
+                                                                        <th className="px-4 py-3 text-right">Valor</th>
+                                                                        <th className="px-4 py-3 text-center">Ações</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody className="divide-y divide-gray-100/50">
                                                                     {group.entries.map((e: any) => (
-                                                                        <tr key={e.id} className="hover:bg-white transition-colors">
-                                                                            <td className="px-8 py-4 font-bold text-gray-400">{formatDate(e.due_date)}</td>
-                                                                            <td className="px-8 py-4 font-black text-gray-700">{e.description}</td>
-                                                                            <td className="px-8 py-4 font-bold text-gray-400">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || 'N/A'}</td>
-                                                                            <td className="px-8 py-4 text-right font-black text-red-600">R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                                                            <td className="px-8 py-4 text-center">
-                                                                                <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
+                                                                        <tr key={e.id} className={`hover:bg-white transition-colors ${selectedEntries.has(e.id) ? 'bg-primary/5' : ''}`}>
+                                                                            <td className="px-4 py-4 text-center">
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={selectedEntries.has(e.id)}
+                                                                                    onChange={() => {
+                                                                                        setSelectedEntries(prev => {
+                                                                                            const next = new Set(prev);
+                                                                                            if (next.has(e.id)) next.delete(e.id);
+                                                                                            else next.add(e.id);
+                                                                                            return next;
+                                                                                        });
+                                                                                    }}
+                                                                                    className="rounded border-gray-300 text-primary focus:ring-primary h-3 w-3"
+                                                                                />
+                                                                            </td>
+                                                                            <td className="px-4 py-4 font-bold text-gray-400">{formatDate(e.due_date)}</td>
+                                                                            <td className="px-4 py-4 font-black text-gray-700">{e.description}</td>
+                                                                            <td className="px-4 py-4 font-bold text-gray-400">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || 'N/A'}</td>
+                                                                            <td className="px-4 py-4 text-right font-black text-red-600">R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                                                            <td className="px-4 py-4 text-center">
+                                                                                <div className="flex items-center justify-center gap-2">
+                                                                                    <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
+                                                                                    <button onClick={() => handleDeleteFinancial(e.id)} className="text-red-400 hover:text-red-500"><span className="material-symbols-outlined text-xs">delete</span></button>
+                                                                                </div>
                                                                             </td>
                                                                         </tr>
                                                                     ))}
@@ -2216,6 +2368,22 @@ const AdminDashboard: React.FC = () => {
                                             <table className="w-full text-xs">
                                                 <thead>
                                                     <tr className="bg-gray-50/50 text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                                        <th className="px-6 py-4 text-center w-10">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={filteredListEntries.length > 0 && filteredListEntries.every(e => selectedEntries.has(e.id))}
+                                                                onChange={() => {
+                                                                    const ids = filteredListEntries.map(e => e.id);
+                                                                    const allSelected = ids.every(id => selectedEntries.has(id));
+                                                                    setSelectedEntries(prev => {
+                                                                        const next = new Set(prev);
+                                                                        ids.forEach(id => allSelected ? next.delete(id) : next.add(id));
+                                                                        return next;
+                                                                    });
+                                                                }}
+                                                                className="rounded border-gray-300 text-primary focus:ring-primary h-3 w-3"
+                                                            />
+                                                        </th>
                                                         <th className="px-6 py-4">Vencimento</th>
                                                         <th className="px-6 py-4">Inclusão</th>
                                                         <th className="px-6 py-4">Descrição</th>
@@ -2229,9 +2397,24 @@ const AdminDashboard: React.FC = () => {
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100/50">
                                                     {filteredListEntries.length === 0 ? (
-                                                        <tr><td colSpan={9} className="px-6 py-20 text-center text-gray-300 font-black uppercase tracking-widest">Nenhum lançamento encontrado</td></tr>
+                                                        <tr><td colSpan={10} className="px-6 py-20 text-center text-gray-300 font-black uppercase tracking-widest">Nenhum lançamento encontrado</td></tr>
                                                     ) : filteredListEntries.map(e => (
-                                                        <tr key={e.id} className="hover:bg-gray-50/30 transition-colors">
+                                                        <tr key={e.id} className={`hover:bg-gray-50/30 transition-colors ${selectedEntries.has(e.id) ? 'bg-primary/5' : ''}`}>
+                                                            <td className="px-6 py-4 text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedEntries.has(e.id)}
+                                                                    onChange={() => {
+                                                                        setSelectedEntries(prev => {
+                                                                            const next = new Set(prev);
+                                                                            if (next.has(e.id)) next.delete(e.id);
+                                                                            else next.add(e.id);
+                                                                            return next;
+                                                                        });
+                                                                    }}
+                                                                    className="rounded border-gray-300 text-primary focus:ring-primary h-3 w-3"
+                                                                />
+                                                            </td>
                                                             <td className="px-6 py-4 font-bold text-gray-600">{formatDate(e.due_date)}</td>
                                                             <td className="px-6 py-4 text-[10px] text-gray-400">{formatDate(e.created_at)}</td>
                                                             <td className="px-6 py-4 font-black text-gray-800">{e.description}</td>
@@ -2249,9 +2432,14 @@ const AdminDashboard: React.FC = () => {
                                                                 {e.type === 'receivable' ? '+' : '-'} R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                             </td>
                                                             <td className="px-6 py-4 text-center">
-                                                                <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
-                                                                    <span className="material-symbols-outlined text-xs">edit</span>
-                                                                </button>
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                        <span className="material-symbols-outlined text-xs">edit</span>
+                                                                    </button>
+                                                                    <button onClick={() => handleDeleteFinancial(e.id)} className="h-7 w-7 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                        <span className="material-symbols-outlined text-xs">delete</span>
+                                                                    </button>
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -2260,6 +2448,39 @@ const AdminDashboard: React.FC = () => {
                                         </div>
                                     </div>
                                 </section>
+                            )}
+
+                            {/* Floating Bulk Action Bar */}
+                            {selectedEntries.size > 0 && (
+                                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-8 animate-in slide-in-from-bottom-8 duration-500 z-50">
+                                    <div className="flex items-center gap-3 pr-8 border-r border-white/10">
+                                        <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center font-black text-xs">
+                                            {selectedEntries.size}
+                                        </div>
+                                        <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">Selecionados</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-4">
+                                        <button
+                                            onClick={handleBulkMarkAsPaid}
+                                            className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 rounded-xl transition-colors text-xs font-black uppercase tracking-widest text-green-400"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">check_circle</span> Liquidar
+                                        </button>
+                                        <button
+                                            onClick={handleBulkDelete}
+                                            className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 rounded-xl transition-colors text-xs font-black uppercase tracking-widest text-red-500"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">delete</span> Excluir
+                                        </button>
+                                        <button
+                                            onClick={() => setSelectedEntries(new Set())}
+                                            className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 rounded-xl transition-colors text-xs font-black uppercase tracking-widest text-gray-400"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">close</span> Cancelar
+                                        </button>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     );
