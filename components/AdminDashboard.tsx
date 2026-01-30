@@ -640,6 +640,7 @@ const AdminDashboard: React.FC = () => {
                     .update({
                         amount: saleForm.net_amount,
                         due_date: saleForm.due_date,
+                        status: saleForm.payment_status,
                         category: saleCategory?.name || 'Venda de Produtos',
                         category_id: saleCategory?.id,
                         description: `Venda #${saleForm.id.slice(0, 8)} - ${product.name} (Editado)`
@@ -666,7 +667,7 @@ const AdminDashboard: React.FC = () => {
                 description: `Venda #${sale.id.slice(0, 8)} - ${product.name}`,
                 amount: saleForm.net_amount,
                 due_date: saleForm.due_date || new Date().toLocaleDateString('sv-SE'),
-                status: 'pending',
+                status: saleForm.payment_status || 'pending',
                 category: saleCategory?.name || 'Venda de Produtos',
                 category_id: saleCategory?.id,
                 sale_id: sale.id,
@@ -764,6 +765,17 @@ const AdminDashboard: React.FC = () => {
                 const { error } = await supabase.from('financial_entries').update(updateData).eq('id', id);
                 if (error) throw error;
 
+                // Sincroniza com a venda se houver vínculo
+                if (oldEntry?.sale_id) {
+                    const saleUpdates: any = {};
+                    if (updateData.status) saleUpdates.payment_status = updateData.status;
+                    if (updateData.due_date) saleUpdates.due_date = updateData.due_date;
+
+                    if (Object.keys(saleUpdates).length > 0) {
+                        await supabase.from('sales').update(saleUpdates).eq('id', oldEntry.sale_id);
+                    }
+                }
+
                 // Update bank balance if status changed to/from 'paid'
                 if (bank && oldEntry && oldEntry.status !== entryData.status) {
                     let balanceAdjustment = 0;
@@ -857,8 +869,13 @@ const AdminDashboard: React.FC = () => {
             bank_account_id: bankId
         }).eq('id', entry.id);
 
-        if (entryError) showNotification(`Erro ao liquidar: ${entryError.message}`, 'error');
-        else {
+        if (entryError) {
+            showNotification(`Erro ao liquidar: ${entryError.message}`, 'error');
+        } else {
+            // Se houver uma venda vinculada, atualiza o status dela também
+            if (entry.sale_id) {
+                await supabase.from('sales').update({ payment_status: 'paid' }).eq('id', entry.sale_id);
+            }
             showNotification('Lançamento liquidado com sucesso!');
             fetchData();
         }
@@ -945,6 +962,12 @@ const AdminDashboard: React.FC = () => {
                         }).eq('id', entry.id);
 
                         if (entryErr) throw entryErr;
+
+                        // Se houver uma venda vinculada, atualiza o status dela também
+                        if (entry.sale_id) {
+                            await supabase.from('sales').update({ payment_status: 'paid' }).eq('id', entry.sale_id);
+                        }
+
                         successCount++;
                     } catch (err) {
                         console.error(err);
