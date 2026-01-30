@@ -1215,6 +1215,7 @@ const AdminDashboard: React.FC = () => {
             formatDate(s.due_date),
             products.find(p => p.id === s.product_id)?.name || 'Produto Excluído',
             s.quantity,
+            `R$ ${s.unit_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             `R$ ${s.total_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             `R$ ${s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             `R$ ${s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -1222,7 +1223,7 @@ const AdminDashboard: React.FC = () => {
 
         autoTable(doc, {
             startY: 80,
-            head: [['Venda', 'Vencimento', 'Produto', 'Qtd', 'Total', 'Comissão', 'Líquido']],
+            head: [['Venda', 'Vencimento', 'Produto', 'Qtd', 'Unitário', 'Total', 'Comissão', 'Líquido']],
             body: tableData,
             theme: 'striped',
             headStyles: {
@@ -1236,7 +1237,8 @@ const AdminDashboard: React.FC = () => {
                 3: { halign: 'center' },
                 4: { halign: 'right' },
                 5: { halign: 'right' },
-                6: { halign: 'right' }
+                6: { halign: 'right' },
+                7: { halign: 'right' }
             },
             bodyStyles: {
                 fontSize: 8
@@ -3540,7 +3542,7 @@ const AdminDashboard: React.FC = () => {
 
                 return (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-                        <div className="bg-white w-full max-w-3xl rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+                        <div className="bg-white w-full max-w-4xl rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
                             <div className="flex justify-between items-center mb-6">
                                 <div>
                                     <h2 className="text-2xl font-black text-gray-800">Fechamento: {selectedResellerForClosing.name}</h2>
@@ -3574,6 +3576,7 @@ const AdminDashboard: React.FC = () => {
                                             <th className="px-3 py-3">Vencimento</th>
                                             <th className="px-3 py-3">Produto</th>
                                             <th className="px-3 py-3 text-right">Qtd</th>
+                                            <th className="px-3 py-3 text-right">Vlr. Unit.</th>
                                             <th className="px-3 py-3 text-right">Bruto</th>
                                             <th className="px-3 py-3 text-right">Comissão</th>
                                             <th className="px-3 py-3 text-right rounded-r-xl">Líquido</th>
@@ -3591,6 +3594,7 @@ const AdminDashboard: React.FC = () => {
                                                     <td className="px-3 py-4 font-bold text-amber-500">{formatDate(s.due_date)}</td>
                                                     <td className="px-3 py-4 font-bold text-gray-700">{products.find(p => p.id === s.product_id)?.name}</td>
                                                     <td className="px-3 py-4 text-right font-bold">{s.quantity}</td>
+                                                    <td className="px-3 py-4 text-right font-medium text-gray-500">R$ {s.unit_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-3 py-4 text-right font-bold text-gray-700">R$ {s.total_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-3 py-4 text-right font-black text-amber-600">R$ {s.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                     <td className="px-3 py-4 text-right font-black text-primary">R$ {s.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
