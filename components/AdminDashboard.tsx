@@ -171,13 +171,15 @@ const AdminDashboard: React.FC = () => {
     });
 
     const [isFinancialModalOpen, setIsFinancialModalOpen] = useState(false);
-    const [financialForm, setFinancialForm] = useState<Partial<FinancialEntry>>({
+    const [financialForm, setFinancialForm] = useState<Partial<FinancialEntry> & { isRecurring?: boolean; recurrenceCount?: number }>({
         type: 'payable',
         due_date: new Date().toLocaleDateString('sv-SE'),
         entry_date: new Date().toLocaleDateString('sv-SE'),
         status: 'pending',
         payment_method: 'cash',
-        installments_total: 1
+        installments_total: 1,
+        isRecurring: false,
+        recurrenceCount: 2
     });
 
     const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
@@ -1154,29 +1156,66 @@ const AdminDashboard: React.FC = () => {
                     }
                 }
             } else {
-                // Create New (handle installments if credit card)
+                // Create New (handle installments if credit card OR recurrence)
                 const installments = entryData.payment_method === 'credit_card' ? (entryData.installments_total || 1) : 1;
+                const isRecurring = financialForm.isRecurring && financialForm.recurrenceCount && financialForm.recurrenceCount > 1;
+                const recurrenceCount = isRecurring ? financialForm.recurrenceCount : 1;
+
                 const baseAmount = entryData.amount;
                 const installmentAmount = parseFloat((baseAmount / installments).toFixed(2));
                 const entriesToInsert = [];
 
-                for (let i = 1; i <= installments; i++) {
-                    const [y, m, d] = (entryData.due_date || new Date().toLocaleDateString('sv-SE')).split('-').map(Number);
-                    const dueDate = new Date(y, m - 1, d);
-                    if (i > 1) {
-                        dueDate.setMonth(dueDate.getMonth() + (i - 1));
-                    }
-                    const finalDueDateStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
+                // If recurring, create multiple entries each 30 days apart
+                if (isRecurring) {
+                    for (let r = 0; r < recurrenceCount!; r++) {
+                        const [y, m, d] = (entryData.due_date || new Date().toLocaleDateString('sv-SE')).split('-').map(Number);
+                        const [ey, em, ed] = (entryData.entry_date || new Date().toLocaleDateString('sv-SE')).split('-').map(Number);
 
-                    entriesToInsert.push({
-                        ...entryData,
-                        bank_account_id: bankId,
-                        amount: i === installments ? parseFloat((baseAmount - (installmentAmount * (installments - 1))).toFixed(2)) : installmentAmount,
-                        due_date: finalDueDateStr,
-                        installment_number: i,
-                        installments_total: installments,
-                        description: installments > 1 ? `${entryData.description} (${i}/${installments})` : entryData.description
-                    });
+                        const dueDate = new Date(y, m - 1, d);
+                        const entryDate = new Date(ey, em - 1, ed);
+
+                        // Add 30 days for each recurrence
+                        dueDate.setDate(dueDate.getDate() + (30 * r));
+                        entryDate.setDate(entryDate.getDate() + (30 * r));
+
+                        const finalDueDateStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
+                        const finalEntryDateStr = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
+
+                        // Remove recurrence fields before inserting
+                        const { isRecurring: _, recurrenceCount: __, ...cleanEntry } = entryData as any;
+
+                        entriesToInsert.push({
+                            ...cleanEntry,
+                            bank_account_id: bankId,
+                            amount: baseAmount,
+                            due_date: finalDueDateStr,
+                            entry_date: finalEntryDateStr,
+                            description: `${entryData.description} (${r + 1}/${recurrenceCount})`
+                        });
+                    }
+                } else {
+                    // Normal flow with installments (for credit card)
+                    for (let i = 1; i <= installments; i++) {
+                        const [y, m, d] = (entryData.due_date || new Date().toLocaleDateString('sv-SE')).split('-').map(Number);
+                        const dueDate = new Date(y, m - 1, d);
+                        if (i > 1) {
+                            dueDate.setMonth(dueDate.getMonth() + (i - 1));
+                        }
+                        const finalDueDateStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
+
+                        // Remove recurrence fields before inserting
+                        const { isRecurring: _, recurrenceCount: __, ...cleanEntry } = entryData as any;
+
+                        entriesToInsert.push({
+                            ...cleanEntry,
+                            bank_account_id: bankId,
+                            amount: i === installments ? parseFloat((baseAmount - (installmentAmount * (installments - 1))).toFixed(2)) : installmentAmount,
+                            due_date: finalDueDateStr,
+                            installment_number: i,
+                            installments_total: installments,
+                            description: installments > 1 ? `${entryData.description} (${i}/${installments})` : entryData.description
+                        });
+                    }
                 }
 
                 const { error } = await supabase.from('financial_entries').insert(entriesToInsert);
@@ -3835,6 +3874,38 @@ const AdminDashboard: React.FC = () => {
                                         <option value="">Selecione o Cartão</option>
                                         {creditCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
                                     </select>
+                                </div>
+                            )}
+
+                            {/* Recurrence option - only show for non-credit card payments and when not editing */}
+                            {financialForm.payment_method !== 'credit_card' && !financialForm.id && (
+                                <div className={`p-4 rounded-2xl border transition-all ${financialForm.isRecurring ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100'}`}>
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={financialForm.isRecurring || false}
+                                            onChange={e => setFinancialForm({ ...financialForm, isRecurring: e.target.checked })}
+                                            className="h-5 w-5 rounded-lg accent-amber-500"
+                                        />
+                                        <div>
+                                            <span className="text-xs font-black text-gray-600 uppercase">Lançamento Recorrente</span>
+                                            <p className="text-[10px] text-gray-400">Ex: Aluguel, Energia, Internet (repete a cada 30 dias)</p>
+                                        </div>
+                                    </label>
+                                    {financialForm.isRecurring && (
+                                        <div className="mt-4 flex items-center gap-4">
+                                            <span className="text-xs font-bold text-gray-500">Repetir por</span>
+                                            <input
+                                                type="number"
+                                                min="2"
+                                                max="24"
+                                                value={financialForm.recurrenceCount || 2}
+                                                onChange={e => setFinancialForm({ ...financialForm, recurrenceCount: parseInt(e.target.value) })}
+                                                className="w-20 p-3 border-none rounded-xl bg-white focus:ring-4 ring-amber-100 outline-none text-center font-bold"
+                                            />
+                                            <span className="text-xs font-bold text-gray-500">meses</span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <div className="grid grid-cols-2 gap-4">
