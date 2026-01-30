@@ -258,6 +258,7 @@ const AdminDashboard: React.FC = () => {
 
     const [hoveredProduct, setHoveredProduct] = useState<any>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+    const [expandedDreRow, setExpandedDreRow] = useState<string | null>(null);
 
     const dreData = useMemo(() => {
         const periodSales = sales.filter(s => {
@@ -269,6 +270,27 @@ const AdminDashboard: React.FC = () => {
             const prod = products.find(p => p.id === s.product_id);
             return acc + (s.quantity * (prod?.cost_price || 0));
         }, 0);
+
+        // Revenue details
+        const revenueDetails = periodSales.map(s => ({
+            id: s.id,
+            date: s.sale_date,
+            description: products.find(p => p.id === s.product_id)?.name || 'Produto',
+            amount: s.total_price || 0,
+            quantity: s.quantity
+        }));
+
+        // CPV details
+        const cpvDetails = periodSales.map(s => {
+            const prod = products.find(p => p.id === s.product_id);
+            return {
+                id: s.id,
+                date: s.sale_date,
+                description: `Custo: ${prod?.name || 'Produto'}`,
+                amount: s.quantity * (prod?.cost_price || 0),
+                quantity: s.quantity
+            };
+        });
 
         const grossRevenue = periodSales.reduce((acc, s) => acc + (s.total_price || 0), 0);
         const cancellations = 0; // Placeholder
@@ -284,33 +306,66 @@ const AdminDashboard: React.FC = () => {
             return date.getMonth() === filterMonth && date.getFullYear() === filterYear;
         });
 
-        const fixedExpenses = periodEntries
+        const fixedEntriesRaw = periodEntries
             .filter(e => {
                 if (e.type !== 'payable') return false;
                 const cat = categories.find(c => c.id === (e as any).category_id);
                 return fixedCategories.includes(cat?.name || '');
-            })
-            .reduce((acc, e) => acc + e.amount, 0);
+            });
 
-        const taxes = periodEntries
+        const fixedExpenses = fixedEntriesRaw.reduce((acc, e) => acc + e.amount, 0);
+        const fixedDetails = fixedEntriesRaw.map(e => ({
+            id: e.id,
+            date: e.due_date,
+            description: e.description,
+            amount: e.amount,
+            category: categories.find(c => c.id === (e as any).category_id)?.name
+        }));
+
+        const taxEntriesRaw = periodEntries
             .filter(e => {
                 if (e.type !== 'payable') return false;
                 const cat = categories.find(c => c.id === (e as any).category_id);
                 return taxCategories.includes(cat?.name || '');
-            })
-            .reduce((acc, e) => acc + e.amount, 0);
+            });
 
-        const fees = periodEntries
+        const taxes = taxEntriesRaw.reduce((acc, e) => acc + e.amount, 0);
+        const taxDetails = taxEntriesRaw.map(e => ({
+            id: e.id,
+            date: e.due_date,
+            description: e.description,
+            amount: e.amount,
+            category: categories.find(c => c.id === (e as any).category_id)?.name
+        }));
+
+        const feeEntriesRaw = periodEntries
             .filter(e => {
                 if (e.type !== 'payable') return false;
                 const cat = categories.find(c => c.id === (e as any).category_id);
                 return feeCategories.includes(cat?.name || '');
-            })
-            .reduce((acc, e) => acc + e.amount, 0);
+            });
 
+        const fees = feeEntriesRaw.reduce((acc, e) => acc + e.amount, 0);
+        const feeDetails = feeEntriesRaw.map(e => ({
+            id: e.id,
+            date: e.due_date,
+            description: e.description,
+            amount: e.amount,
+            category: categories.find(c => c.id === (e as any).category_id)?.name
+        }));
+
+        // Commission details from sales
         const commissions = periodSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
+        const commissionDetails = periodSales
+            .filter(s => s.discount_amount > 0)
+            .map(s => ({
+                id: s.id,
+                date: s.sale_date,
+                description: `Comissão: ${resellers.find(r => r.id === s.reseller_id)?.name || 'Vendedor'}`,
+                amount: s.discount_amount || 0
+            }));
 
-        const variableExpenses = periodEntries
+        const variableEntriesRaw = periodEntries
             .filter(e => {
                 if (e.type !== 'payable') return false;
                 const cat = categories.find(c => c.id === (e as any).category_id);
@@ -318,27 +373,42 @@ const AdminDashboard: React.FC = () => {
                     !taxCategories.includes(cat?.name || '') &&
                     !feeCategories.includes(cat?.name || '') &&
                     cat?.name !== 'Forn Produtos';
-            })
-            .reduce((acc, e) => acc + e.amount, 0);
+            });
+
+        const variableExpenses = variableEntriesRaw.reduce((acc, e) => acc + e.amount, 0);
+        const variableDetails = variableEntriesRaw.map(e => ({
+            id: e.id,
+            date: e.due_date,
+            description: e.description,
+            amount: e.amount,
+            category: categories.find(c => c.id === (e as any).category_id)?.name
+        }));
 
         const operationalProfit = contributionMargin - fixedExpenses;
         const netProfit = operationalProfit - taxes - fees - commissions - variableExpenses;
 
         return {
             grossRevenue,
+            revenueDetails,
             cancellations,
             netRevenue,
             cpv: periodCosts,
+            cpvDetails,
             contributionMargin,
             fixedExpenses,
+            fixedDetails,
             operationalProfit,
             taxes,
+            taxDetails,
             fees,
+            feeDetails,
             commissions,
+            commissionDetails,
             variableExpenses,
+            variableDetails,
             netProfit
         };
-    }, [sales, financialEntries, products, categories, filterMonth, filterYear]);
+    }, [sales, financialEntries, products, categories, filterMonth, filterYear, resellers]);
 
     const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const formatPercent = (val: number, base: number) => base === 0 ? '0.00%' : `${((val / base) * 100).toFixed(2)}%`;
@@ -3625,7 +3695,95 @@ const AdminDashboard: React.FC = () => {
                 {/* DRE Tab */}
                 {activeTab === 'dre' && (() => {
 
+                    const ExpandableRow = ({
+                        rowKey,
+                        label,
+                        value,
+                        details = [],
+                        indent = false,
+                        isTotal = false,
+                        negative = false,
+                        baseValue = dreData.grossRevenue
+                    }: any) => {
+                        const isExpanded = expandedDreRow === rowKey;
+                        const hasDetails = details && details.length > 0;
 
+                        return (
+                            <div>
+                                <div
+                                    onClick={() => hasDetails && setExpandedDreRow(isExpanded ? null : rowKey)}
+                                    className={`flex justify-between items-center py-4 px-6 ${isTotal ? 'bg-gray-50 font-black text-gray-800 border-y' : 'border-b border-gray-50'} ${hasDetails ? 'cursor-pointer hover:bg-gray-50/70 transition-colors' : ''}`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {indent && <div className="w-6 h-px bg-gray-200 mr-3" />}
+                                        <span className={`${indent ? 'text-gray-500 text-sm' : 'text-gray-700 font-bold'}`}>{label}</span>
+                                        {hasDetails && (
+                                            <span className={`material-symbols-outlined text-xs transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''} text-gray-300`}>
+                                                expand_more
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-8">
+                                        <span className={`text-[10px] font-black w-16 text-right ${isTotal ? 'text-primary' : 'text-gray-300'}`}>
+                                            {formatPercent(value, baseValue)}
+                                        </span>
+                                        <span className={`font-mono text-sm min-w-[120px] text-right ${negative ? 'text-red-500' : isTotal ? 'text-primary' : 'text-gray-700'}`}>
+                                            {negative ? '-' : ''} {formatCurrency(value)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Details Panel */}
+                                {isExpanded && hasDetails && (
+                                    <div className="bg-gray-50/80 border-b border-gray-100 animate-in slide-in-from-top-2 duration-200">
+                                        <div className="px-8 py-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <span className="material-symbols-outlined text-sm text-primary">info</span>
+                                                <span className="text-[10px] font-black text-primary uppercase tracking-widest">Composição</span>
+                                            </div>
+                                            <div className="bg-white rounded-2xl border overflow-hidden shadow-sm">
+                                                <table className="w-full text-xs">
+                                                    <thead>
+                                                        <tr className="bg-gray-50/50 text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b">
+                                                            <th className="px-4 py-3">Data</th>
+                                                            <th className="px-4 py-3">Descrição</th>
+                                                            {details[0]?.category && <th className="px-4 py-3">Categoria</th>}
+                                                            {details[0]?.quantity !== undefined && <th className="px-4 py-3 text-right">Qtd</th>}
+                                                            <th className="px-4 py-3 text-right">Valor</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-50">
+                                                        {details.map((item: any, idx: number) => (
+                                                            <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                                                                <td className="px-4 py-3 text-gray-500 font-medium">{formatDate(item.date)}</td>
+                                                                <td className="px-4 py-3 font-medium text-gray-700">{item.description}</td>
+                                                                {item.category !== undefined && <td className="px-4 py-3 text-gray-400">{item.category || '-'}</td>}
+                                                                {item.quantity !== undefined && <td className="px-4 py-3 text-right text-gray-500">{item.quantity}</td>}
+                                                                <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${negative ? 'text-red-500' : 'text-gray-700'}`}>
+                                                                    {formatCurrency(item.amount)}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr className="bg-gray-50/80 border-t">
+                                                            <td colSpan={details[0]?.category !== undefined ? 3 : 2} className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                                Total ({details.length} itens)
+                                                            </td>
+                                                            {details[0]?.quantity !== undefined && <td className="px-4 py-3"></td>}
+                                                            <td className={`px-4 py-3 text-right font-black whitespace-nowrap ${negative ? 'text-red-600' : 'text-primary'}`}>
+                                                                {formatCurrency(value)}
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    };
 
                     const Row = ({ label, value, indent = false, isTotal = false, negative = false, baseValue = dreData.grossRevenue }: any) => (
                         <div className={`flex justify-between items-center py-4 px-6 ${isTotal ? 'bg-gray-50 font-black text-gray-800 border-y' : 'border-b border-gray-50'}`}>
@@ -3649,23 +3807,24 @@ const AdminDashboard: React.FC = () => {
                             <div className="p-10 border-b bg-gray-50/30">
                                 <h2 className="text-2xl font-black text-gray-800">DRE - Demonstrativo de Resultado</h2>
                                 <p className="text-sm text-gray-400 mt-1 uppercase tracking-widest font-bold">Resumo Financeiro do Período Selecionado</p>
+                                <p className="text-[10px] text-primary mt-2 font-bold">💡 Clique nas linhas para ver detalhamento</p>
                             </div>
 
                             <div className="flex flex-col">
-                                <Row label="Receita Bruta" value={dreData.grossRevenue} />
+                                <ExpandableRow rowKey="revenue" label="Receita Bruta" value={dreData.grossRevenue} details={dreData.revenueDetails} />
                                 <Row label="(-) Devoluções/Cancelamentos" value={dreData.cancellations} negative indent />
                                 <Row label="(=) Receita Líquida" value={dreData.netRevenue} isTotal />
 
-                                <Row label="(-) CPV (Custo do Produto Vendido)" value={dreData.cpv} negative indent />
+                                <ExpandableRow rowKey="cpv" label="(-) CPV (Custo do Produto Vendido)" value={dreData.cpv} details={dreData.cpvDetails} negative indent />
                                 <Row label="(=) Margem de Contribuição" value={dreData.contributionMargin} isTotal />
 
-                                <Row label="(-) Despesas Fixas" value={dreData.fixedExpenses} negative indent />
+                                <ExpandableRow rowKey="fixed" label="(-) Despesas Fixas" value={dreData.fixedExpenses} details={dreData.fixedDetails} negative indent />
                                 <Row label="(=) Lucro Operacional (EBITDA)" value={dreData.operationalProfit} isTotal />
 
-                                <Row label="(-) Impostos (Simples Nacional)" value={dreData.taxes} negative indent />
-                                <Row label="(-) Taxas (Administrativas/Cartão)" value={dreData.fees} negative indent />
-                                <Row label="(-) Comissões (Vendedores)" value={dreData.commissions} negative indent />
-                                <Row label="(-) Despesas Variáveis" value={dreData.variableExpenses} negative indent />
+                                <ExpandableRow rowKey="taxes" label="(-) Impostos (Simples Nacional)" value={dreData.taxes} details={dreData.taxDetails} negative indent />
+                                <ExpandableRow rowKey="fees" label="(-) Taxas (Administrativas/Cartão)" value={dreData.fees} details={dreData.feeDetails} negative indent />
+                                <ExpandableRow rowKey="commissions" label="(-) Comissões (Vendedores)" value={dreData.commissions} details={dreData.commissionDetails} negative indent />
+                                <ExpandableRow rowKey="variable" label="(-) Despesas Variáveis" value={dreData.variableExpenses} details={dreData.variableDetails} negative indent />
 
                                 <div className="h-4 bg-gray-50/50" />
 
