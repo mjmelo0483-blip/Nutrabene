@@ -421,8 +421,9 @@ const AdminDashboard: React.FC = () => {
         in15Days.setDate(today.getDate() + 15);
         in15Days.setHours(23, 59, 59, 999);
 
-        const expired = products.filter(p => p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < today);
+        const expired = products.filter(p => (p.stock_quantity || 0) > 0 && p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < today);
         const expiringSoon = products.filter(p =>
+            (p.stock_quantity || 0) > 0 &&
             p.expiration_date &&
             new Date(p.expiration_date + 'T00:00:00') >= today &&
             new Date(p.expiration_date + 'T23:59:59') <= in15Days
@@ -597,6 +598,52 @@ const AdminDashboard: React.FC = () => {
 
     // --- Product/Stock Handlers ---
 
+    // --- Centralized Sync Logic (FIFO & WAC) ---
+    async function syncProductData(productId: string) {
+        const { data: movements } = await supabase
+            .from('inventory_movements')
+            .select('*')
+            .eq('product_id', productId)
+            .order('movement_date', { ascending: true })
+            .order('created_at', { ascending: true });
+
+        if (!movements) return;
+
+        const inflows = movements.filter(m => m.type === 'purchase' || m.type === 'initial');
+        const outflows = movements.filter(m => m.type === 'sale' || m.type === 'adjustment');
+
+        const totalIn = inflows.reduce((acc, m) => acc + m.quantity, 0);
+        const totalOut = outflows.reduce((acc, m) => acc + m.quantity, 0);
+        const finalStock = Math.max(0, totalIn - totalOut);
+
+        // 1. Calculate Weighted Average Cost (WAC)
+        let totalValue = 0;
+        let totalQtyIn = 0;
+        inflows.forEach(m => {
+            totalValue += m.quantity * (m.unit_cost || 0);
+            totalQtyIn += m.quantity;
+        });
+        const finalCost = totalQtyIn > 0 ? totalValue / totalQtyIn : 0;
+
+        // 2. Calculate Active Expiration (FIFO)
+        let remainingOut = totalOut;
+        let activeExp = null;
+        for (const m of inflows) {
+            if (remainingOut >= m.quantity) {
+                remainingOut -= m.quantity;
+            } else {
+                activeExp = m.expiration_date;
+                break;
+            }
+        }
+
+        await supabase.from('products').update({
+            stock_quantity: finalStock,
+            cost_price: finalCost,
+            expiration_date: activeExp
+        }).eq('id', productId);
+    }
+
     async function handleSaveProduct(e: React.FormEvent) {
         e.preventDefault();
         if (!editingProduct) return;
@@ -612,13 +659,21 @@ const AdminDashboard: React.FC = () => {
             const { error: updError } = await supabase.from('products').update(updateData).eq('id', id);
             error = updError;
         } else {
-            // No cadastro de novo produto, o estoque inicial reflete no estoque atual
-            const newProduct = {
-                ...editingProduct,
-                stock_quantity: editingProduct.initial_stock || 0
-            };
-            const { error: insError } = await supabase.from('products').insert([newProduct]);
+            const { error: insError } = await supabase.from('products').insert([editingProduct]);
             error = insError;
+
+            if (!error && (editingProduct.initial_stock || 0) > 0) {
+                await supabase.from('inventory_movements').insert([{
+                    product_id: editingProduct.id,
+                    type: 'initial',
+                    quantity: editingProduct.initial_stock,
+                    unit_cost: editingProduct.cost_price || 0,
+                    movement_date: editingProduct.initial_stock_date || new Date().toISOString().split('T')[0],
+                    expiration_date: editingProduct.expiration_date,
+                    reason: 'Estoque Inicial'
+                }]);
+                await syncProductData(editingProduct.id!);
+            }
         }
 
         if (error) showNotification(`Erro ao salvar produto: ${error.message}`, 'error');
@@ -629,7 +684,6 @@ const AdminDashboard: React.FC = () => {
             fetchData();
         }
     }
-
     async function handleSaveMovement(e: React.FormEvent) {
         e.preventDefault();
         if (!movementForm.product_id || (movementForm.quantity || 0) <= 0) {
@@ -642,43 +696,12 @@ const AdminDashboard: React.FC = () => {
 
         setLoading(true);
         try {
-            let newStock = product.stock_quantity;
-            let newCost = product.cost_price;
-
-            if (movementForm.type === 'purchase') {
-                const purchaseQty = movementForm.quantity || 0;
-                const unitCost = movementForm.unit_cost || 0;
-
-                // Cálculo de Custo Médio Ponderado (WAC)
-                // Novo Custo = (Estoque Atual * Custo Atual + Qtd Comprada * Custo Unitário) / (Estoque Atual + Qtd Comprada)
-                const currentTotalValue = product.stock_quantity * product.cost_price;
-                const purchaseTotalValue = purchaseQty * unitCost;
-                newStock = product.stock_quantity + purchaseQty;
-                newCost = (currentTotalValue + purchaseTotalValue) / newStock;
-            } else if (movementForm.type === 'adjustment') {
-                const adjQty = movementForm.quantity || 0;
-                if (adjQty > product.stock_quantity) {
-                    throw new Error('Quantidade de baixa superior ao estoque disponível.');
-                }
-                newStock = product.stock_quantity - adjQty;
-                // O custo médio não muda na baixa
-            }
-
             // 1. Inserir movimentação
             const { error: movError } = await supabase.from('inventory_movements').insert([movementForm]);
             if (movError) throw movError;
 
-            // 2. Atualizar produto
-            const productUpdate: any = {
-                stock_quantity: newStock,
-                cost_price: newCost
-            };
-            if (movementForm.type === 'purchase' && movementForm.expiration_date) {
-                productUpdate.expiration_date = movementForm.expiration_date;
-            }
-
-            const { error: prodError } = await supabase.from('products').update(productUpdate).eq('id', product.id);
-            if (prodError) throw prodError;
+            // 2. Sincronizar Produto (WAC & FIFO)
+            await syncProductData(product.id);
 
             showNotification('Movimentação registrada com sucesso!');
             setIsMovementModalOpen(false);
@@ -813,7 +836,12 @@ const AdminDashboard: React.FC = () => {
                         if (oldProduct) await supabase.from('products').update({ stock_quantity: oldProduct.stock_quantity }).eq('id', oldProduct.id);
                         return;
                     }
-                    await supabase.from('products').update({ stock_quantity: product.stock_quantity - (saleForm.quantity || 0) }).eq('id', product.id);
+
+                    const newStock = product.stock_quantity - (saleForm.quantity || 0);
+                    const updatePayload: any = { stock_quantity: newStock };
+                    if (newStock <= 0) updatePayload.expiration_date = null;
+
+                    await supabase.from('products').update(updatePayload).eq('id', product.id);
                 }
 
                 // Update the sale
@@ -832,6 +860,20 @@ const AdminDashboard: React.FC = () => {
                         description: `Venda #${saleForm.id.slice(0, 8)} - ${product.name} (Editado)`
                     })
                     .eq('sale_id', saleForm.id);
+
+                // Sincronizar dados de estoque e validade
+                await supabase.from('inventory_movements')
+                    .update({
+                        product_id: saleForm.product_id,
+                        quantity: saleForm.quantity,
+                        movement_date: saleForm.sale_date
+                    })
+                    .eq('sale_id', saleForm.id);
+
+                await syncProductData(oldSale.product_id);
+                if (oldSale.product_id !== saleForm.product_id) {
+                    await syncProductData(saleForm.product_id);
+                }
             }
         } else {
             // New sale
@@ -843,8 +885,17 @@ const AdminDashboard: React.FC = () => {
             const { data: sale, error: slsError } = await supabase.from('sales').insert([saleForm]).select().single();
             if (slsError) { showNotification(`Erro na venda: ${slsError.message}`, 'error'); return; }
 
-            // Decrement stock in database
-            await supabase.from('products').update({ stock_quantity: product.stock_quantity - (saleForm.quantity || 0) }).eq('id', product.id);
+            // Registrar saída no estoque (FIFO)
+            await supabase.from('inventory_movements').insert([{
+                product_id: saleForm.product_id,
+                type: 'sale',
+                quantity: saleForm.quantity,
+                movement_date: saleForm.sale_date,
+                sale_id: sale.id,
+                reason: `Venda #${sale.id.slice(0, 8)}`
+            }]);
+
+            await syncProductData(saleForm.product_id);
 
             // Create financial entry
             const saleCategory = categories.find(c => c.name.toLowerCase().includes('venda de produtos'));
@@ -872,14 +923,11 @@ const AdminDashboard: React.FC = () => {
             'Excluir Venda',
             'Deseja excluir esta venda? ATENÇÃO: O estoque será restaurado automaticamente.',
             async () => {
+                // Recalcular produto após exclusão (o cascade apagará o movimento)
                 const sale = sales.find(s => s.id === id);
                 if (!sale) return;
 
-                // Restore stock
-                const product = products.find(p => p.id === sale.product_id);
-                if (product) {
-                    await supabase.from('products').update({ stock_quantity: product.stock_quantity + sale.quantity }).eq('id', product.id);
-                }
+                const productId = sale.product_id;
 
                 // Delete associated financial entry
                 await supabase.from('financial_entries').delete().eq('sale_id', id);
@@ -888,6 +936,7 @@ const AdminDashboard: React.FC = () => {
                 const { error } = await supabase.from('sales').delete().eq('id', id);
                 if (error) showNotification(`Erro ao excluir: ${error.message}`, 'error');
                 else {
+                    await syncProductData(productId);
                     showNotification('Venda e registros associados removidos.');
                     fetchData();
                 }
@@ -2289,8 +2338,9 @@ const AdminDashboard: React.FC = () => {
                                     </thead>
                                     <tbody className="divide-y text-sm text-gray-600">
                                         {products.map(p => {
-                                            const isExpired = p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < new Date();
-                                            const isExpiringSoon = p.expiration_date && !isExpired && (
+                                            const stockCount = p.stock_quantity || 0;
+                                            const isExpired = stockCount > 0 && p.expiration_date && new Date(p.expiration_date + 'T23:59:59') < new Date();
+                                            const isExpiringSoon = stockCount > 0 && p.expiration_date && !isExpired && (
                                                 new Date(p.expiration_date + 'T00:00:00') <= new Date(new Date().setDate(new Date().getDate() + 15))
                                             );
 
