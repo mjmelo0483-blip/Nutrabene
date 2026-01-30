@@ -228,6 +228,17 @@ const AdminDashboard: React.FC = () => {
 
     const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
     const [selectedSales, setSelectedSales] = useState<Set<string>>(new Set());
+    const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+    const [bulkEditForm, setBulkEditForm] = useState({
+        sale_date: '',
+        due_date: '',
+        payment_status: '',
+        reseller_id: '',
+        updateSaleDate: false,
+        updateDueDate: false,
+        updateStatus: false,
+        updateReseller: false
+    });
 
     const [salesFilters, setSalesFilters] = useState({
         startDate: '',
@@ -816,6 +827,63 @@ const AdminDashboard: React.FC = () => {
                 }
             }
         );
+    }
+
+    async function handleBulkEditSales() {
+        if (selectedSales.size === 0) return;
+
+        const updates: any = {};
+        if (bulkEditForm.updateSaleDate && bulkEditForm.sale_date) {
+            updates.sale_date = bulkEditForm.sale_date;
+        }
+        if (bulkEditForm.updateDueDate && bulkEditForm.due_date) {
+            updates.due_date = bulkEditForm.due_date;
+        }
+        if (bulkEditForm.updateStatus && bulkEditForm.payment_status) {
+            updates.payment_status = bulkEditForm.payment_status;
+        }
+        if (bulkEditForm.updateReseller) {
+            updates.reseller_id = bulkEditForm.reseller_id || null;
+        }
+
+        if (Object.keys(updates).length === 0) {
+            showNotification('Selecione pelo menos um campo para alterar!', 'error');
+            return;
+        }
+
+        try {
+            const saleIds = Array.from(selectedSales);
+
+            // Update sales
+            const { error } = await supabase.from('sales').update(updates).in('id', saleIds);
+            if (error) throw error;
+
+            // Update associated financial entries if due_date or status changed
+            if (updates.due_date || updates.payment_status) {
+                const financialUpdates: any = {};
+                if (updates.due_date) financialUpdates.due_date = updates.due_date;
+                if (updates.payment_status) financialUpdates.status = updates.payment_status;
+
+                await supabase.from('financial_entries').update(financialUpdates).in('sale_id', saleIds);
+            }
+
+            showNotification(`${saleIds.length} vendas atualizadas com sucesso!`);
+            setIsBulkEditModalOpen(false);
+            setSelectedSales(new Set());
+            setBulkEditForm({
+                sale_date: '',
+                due_date: '',
+                payment_status: '',
+                reseller_id: '',
+                updateSaleDate: false,
+                updateDueDate: false,
+                updateStatus: false,
+                updateReseller: false
+            });
+            fetchData();
+        } catch (error: any) {
+            showNotification(`Erro ao atualizar vendas: ${error.message}`, 'error');
+        }
     }
 
     // --- Financial Handlers ---
@@ -2176,6 +2244,12 @@ const AdminDashboard: React.FC = () => {
                                                 </div>
 
                                                 <div className="flex gap-4">
+                                                    <button
+                                                        onClick={() => setIsBulkEditModalOpen(true)}
+                                                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white font-black text-[11px] tracking-widest transition-all"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">edit</span> ALTERAR
+                                                    </button>
                                                     <button
                                                         onClick={handleBulkDeleteSales}
                                                         className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white font-black text-[11px] tracking-widest transition-all"
@@ -4181,6 +4255,134 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )
             }
+
+            {/* Bulk Edit Sales Modal */}
+            {isBulkEditModalOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-md rounded-[32px] p-8 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 className="text-2xl font-black text-gray-800">Editar em Lote</h2>
+                                <p className="text-xs text-gray-400 mt-1">{selectedSales.size} vendas selecionadas</p>
+                            </div>
+                            <button onClick={() => setIsBulkEditModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selecione os campos para alterar:</p>
+
+                            {/* Data da Venda */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditForm.updateSaleDate ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditForm.updateSaleDate}
+                                        onChange={e => setBulkEditForm({ ...bulkEditForm, updateSaleDate: e.target.checked })}
+                                        className="h-5 w-5 rounded-lg accent-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Data da Venda</span>
+                                </label>
+                                {bulkEditForm.updateSaleDate && (
+                                    <input
+                                        type="date"
+                                        value={bulkEditForm.sale_date}
+                                        onChange={e => setBulkEditForm({ ...bulkEditForm, sale_date: e.target.value })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none"
+                                    />
+                                )}
+                            </div>
+
+                            {/* Data de Vencimento */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditForm.updateDueDate ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditForm.updateDueDate}
+                                        onChange={e => setBulkEditForm({ ...bulkEditForm, updateDueDate: e.target.checked })}
+                                        className="h-5 w-5 rounded-lg accent-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Data de Vencimento</span>
+                                </label>
+                                {bulkEditForm.updateDueDate && (
+                                    <input
+                                        type="date"
+                                        value={bulkEditForm.due_date}
+                                        onChange={e => setBulkEditForm({ ...bulkEditForm, due_date: e.target.value })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none"
+                                    />
+                                )}
+                            </div>
+
+                            {/* Status */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditForm.updateStatus ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditForm.updateStatus}
+                                        onChange={e => setBulkEditForm({ ...bulkEditForm, updateStatus: e.target.checked })}
+                                        className="h-5 w-5 rounded-lg accent-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Status de Pagamento</span>
+                                </label>
+                                {bulkEditForm.updateStatus && (
+                                    <select
+                                        value={bulkEditForm.payment_status}
+                                        onChange={e => setBulkEditForm({ ...bulkEditForm, payment_status: e.target.value })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Selecione o Status</option>
+                                        <option value="pending">⏳ Pendente</option>
+                                        <option value="paid">✅ Pago</option>
+                                        <option value="overdue">⚠️ Atrasado</option>
+                                    </select>
+                                )}
+                            </div>
+
+                            {/* Revendedor */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditForm.updateReseller ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditForm.updateReseller}
+                                        onChange={e => setBulkEditForm({ ...bulkEditForm, updateReseller: e.target.checked })}
+                                        className="h-5 w-5 rounded-lg accent-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Revendedor</span>
+                                </label>
+                                {bulkEditForm.updateReseller && (
+                                    <select
+                                        value={bulkEditForm.reseller_id}
+                                        onChange={e => setBulkEditForm({ ...bulkEditForm, reseller_id: e.target.value })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Venda Direta (Sem Revendedor)</option>
+                                        {resellers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                    </select>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex space-x-4 pt-6">
+                            <button
+                                type="button"
+                                onClick={() => setIsBulkEditModalOpen(false)}
+                                className="flex-1 py-4 font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleBulkEditSales}
+                                className="flex-[2] bg-blue-500 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-200 hover:shadow-blue-300 hover:-translate-y-1 transition-all flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-sm">check</span>
+                                Aplicar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };
