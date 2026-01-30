@@ -3884,29 +3884,29 @@ const AdminDashboard: React.FC = () => {
             {
                 isProductModalOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-                        <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl animate-in zoom-in duration-300">
-                            <div className="flex justify-between items-center mb-10">
-                                <h2 className="text-3xl font-black text-gray-800">{editingProduct?.id && products.some(p => p.id === editingProduct.id) ? 'Configurar SKU' : 'Novo SKU'}</h2>
+                        <div className="bg-white w-full max-w-md rounded-[32px] p-8 shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-black text-gray-800">{editingProduct?.id && products.some(p => p.id === editingProduct.id) ? 'Configurar SKU' : 'Novo SKU'}</h2>
                                 <button onClick={() => setIsProductModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
                                     <span className="material-symbols-outlined">close</span>
                                 </button>
                             </div>
-                            <form onSubmit={handleSaveProduct} className="space-y-6">
-                                <input type="text" value={editingProduct?.id || ''} onChange={e => setEditingProduct({ ...editingProduct, id: e.target.value })} placeholder="ID Único / SKU (ex: ltn-200ml)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all disabled:opacity-30" disabled={!!editingProduct?.id && products.some(p => p.id === editingProduct.id)} required />
-                                <input type="text" value={editingProduct?.name || ''} onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })} placeholder="Nome Comercial do Produto" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                            <form onSubmit={handleSaveProduct} className="space-y-4">
+                                <input type="text" value={editingProduct?.id || ''} onChange={e => setEditingProduct({ ...editingProduct, id: e.target.value })} placeholder="ID Único / SKU (ex: ltn-200ml)" className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all disabled:opacity-30" disabled={!!editingProduct?.id && products.some(p => p.id === editingProduct.id)} required />
+                                <input type="text" value={editingProduct?.name || ''} onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })} placeholder="Nome Comercial do Produto" className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <label className="block">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Custo Unitário (R$)</span>
-                                        <input type="number" step="0.01" value={editingProduct?.cost_price || 0} onChange={e => setEditingProduct({ ...editingProduct, cost_price: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                        <input type="number" step="0.01" value={editingProduct?.cost_price || 0} onChange={e => setEditingProduct({ ...editingProduct, cost_price: parseFloat(e.target.value) })} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                     </label>
                                     <label className="block">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">PVP (Venda R$)</span>
-                                        <input type="number" step="0.01" value={editingProduct?.price || 0} onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                        <input type="number" step="0.01" value={editingProduct?.price || 0} onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                     </label>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4 p-6 bg-blue-50/50 rounded-3xl border border-blue-100">
+                                <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
                                     <label className="block">
                                         <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Estoque Inicial</span>
                                         <input type="number" value={editingProduct?.initial_stock || 0} onChange={e => setEditingProduct({ ...editingProduct, initial_stock: parseInt(e.target.value) })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
@@ -3920,14 +3920,14 @@ const AdminDashboard: React.FC = () => {
                                 {editingProduct?.id && products.some(p => p.id === editingProduct.id) && (
                                     <label className="block">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Estoque Atual (Somente Visualização)</span>
-                                        <input type="number" value={editingProduct?.stock_quantity || 0} className="w-full p-5 border-none rounded-2xl bg-gray-100 mt-1" disabled />
+                                        <input type="number" value={editingProduct?.stock_quantity || 0} className="w-full p-4 border-none rounded-2xl bg-gray-100 mt-1" disabled />
                                         <p className="text-[10px] text-gray-400 mt-2 px-4 italic">* Para alterar o estoque use o botão "Movimentar Estoque"</p>
                                     </label>
                                 )}
 
-                                <div className="flex space-x-6 pt-6">
-                                    <button type="button" onClick={() => setIsProductModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Voltar</button>
-                                    <button type="submit" className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Confirmar Registro</button>
+                                <div className="flex space-x-4 pt-4">
+                                    <button type="button" onClick={() => setIsProductModalOpen(false)} className="flex-1 py-4 font-bold text-gray-400 hover:text-gray-600 transition-colors">Voltar</button>
+                                    <button type="submit" className="flex-[2] bg-primary text-white py-4 rounded-2xl font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all">Confirmar Registro</button>
                                 </div>
                             </form>
                         </div>
