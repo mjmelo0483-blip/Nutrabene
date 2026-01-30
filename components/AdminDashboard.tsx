@@ -3884,7 +3884,7 @@ const AdminDashboard: React.FC = () => {
             {
                 isProductModalOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-                        <div className="bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl animate-in zoom-in duration-300">
                             <div className="flex justify-between items-center mb-10">
                                 <h2 className="text-3xl font-black text-gray-800">{editingProduct?.id && products.some(p => p.id === editingProduct.id) ? 'Configurar SKU' : 'Novo SKU'}</h2>
                                 <button onClick={() => setIsProductModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
