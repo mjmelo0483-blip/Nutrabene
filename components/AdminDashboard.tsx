@@ -349,7 +349,11 @@ const AdminDashboard: React.FC = () => {
 
         const periodEntries = financialEntries.filter(e => {
             const date = new Date(e.due_date);
-            return date.getMonth() === filterMonth && date.getFullYear() === filterYear;
+            const isPeriod = date.getMonth() === filterMonth && date.getFullYear() === filterYear;
+            const isTransfer = e.payment_method === 'transfer' || !!e.transfer_id;
+            const isInvestment = e.payment_method === 'investment' || !!e.investment_id;
+
+            return isPeriod && !isTransfer && !isInvestment;
         });
 
         const fixedEntriesRaw = periodEntries
