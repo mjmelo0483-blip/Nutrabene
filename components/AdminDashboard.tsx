@@ -1816,12 +1816,13 @@ const AdminDashboard: React.FC = () => {
     async function handleSaveAccount(e: React.FormEvent) {
         e.preventDefault();
         let error;
-        // The balance field in the form represents the INITIAL balance
-        // For new accounts: set both balance and initial_balance to the entered value
-        // For existing accounts: update initial_balance to match balance (they represent the same thing in the form)
+
         const payload = {
             ...accountForm,
-            initial_balance: accountForm.balance || 0 // Always sync initial_balance with the form value
+            initial_balance: accountForm.initial_balance || 0,
+            // If new account, balance starts as initial_balance. 
+            // If existing, we sync them since this form treats "Saldo Inicial" as the balance ground truth.
+            balance: accountForm.initial_balance || 0
         };
         if (accountForm.id) {
             const { id, ...data } = payload;
@@ -1974,23 +1975,6 @@ const AdminDashboard: React.FC = () => {
                         initialBalance -= e.amount;
                     }
                 });
-            }
-        });
-
-        // Also add entries without a bank_account_id (if any) that are before the period start
-        const entriesWithoutBank = financialEntries.filter(e => {
-            const dueDate = e.due_date.split('T')[0];
-            return !e.bank_account_id &&
-                dueDate < periodStartStr &&
-                e.payment_method !== 'transfer' &&
-                e.payment_method !== 'investment';
-        });
-
-        entriesWithoutBank.forEach(e => {
-            if (e.type === 'receivable') {
-                initialBalance += e.amount;
-            } else {
-                initialBalance -= e.amount;
             }
         });
 
@@ -3977,7 +3961,7 @@ const AdminDashboard: React.FC = () => {
                                 <p className="text-sm text-gray-400">Gerencie seus limites, faturas e cartões.</p>
                             </div>
                             <div className="flex gap-4">
-                                <button onClick={() => { setAccountForm({ balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') }); setIsAccountModalOpen(true); }} className="px-6 py-4 bg-white border border-gray-100 rounded-[24px] font-black text-xs text-gray-500 hover:bg-gray-50 flex items-center shadow-sm transition-all hover:scale-105 active:scale-95">
+                                <button onClick={() => { setAccountForm({ balance: 0, initial_balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') }); setIsAccountModalOpen(true); }} className="px-6 py-4 bg-white border border-gray-100 rounded-[24px] font-black text-xs text-gray-500 hover:bg-gray-50 flex items-center shadow-sm transition-all hover:scale-105 active:scale-95">
                                     <span className="material-symbols-outlined mr-2">account_balance_wallet</span> Gerenciar Bancos
                                 </button>
                                 <button onClick={() => { setCardForm({ limit_amount: 0, current_balance: 0 }); setIsCardModalOpen(true); }} className="px-6 py-4 bg-indigo-600 text-white rounded-[24px] font-black text-xs shadow-xl shadow-indigo-200 flex items-center transition-all hover:scale-105 active:scale-95">
@@ -4846,7 +4830,7 @@ const AdminDashboard: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Saldo Inicial (R$)</label>
-                                    <input type="number" step="0.01" value={accountForm.balance || 0} onChange={e => setAccountForm({ ...accountForm, balance: parseFloat(e.target.value) })} placeholder="0,00" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                                    <input type="number" step="0.01" value={accountForm.initial_balance || 0} onChange={e => setAccountForm({ ...accountForm, initial_balance: parseFloat(e.target.value) })} placeholder="0,00" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data do Saldo</label>
