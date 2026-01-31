@@ -242,7 +242,7 @@ const AdminDashboard: React.FC = () => {
     const [financialFilters, setFinancialFilters] = useState({
         startDate: '',
         endDate: '',
-        dateType: 'due_date' as 'due_date' | 'created_at',
+        dateType: 'due_date' as 'due_date' | 'entry_date',
         category_id: '',
         bank_account_id: '',
         payment_method: '',
@@ -975,6 +975,7 @@ const AdminDashboard: React.FC = () => {
                     .update({
                         amount: saleForm.net_amount,
                         due_date: saleForm.due_date,
+                        entry_date: saleForm.sale_date,
                         status: saleForm.payment_status,
                         category: saleCategory?.name || 'Venda de Produtos',
                         category_id: saleCategory?.id,
@@ -1043,6 +1044,7 @@ const AdminDashboard: React.FC = () => {
                 description: `Venda #${sale.id.slice(0, 8)} - ${product.name}`,
                 amount: saleForm.net_amount,
                 due_date: saleForm.due_date || new Date().toLocaleDateString('sv-SE'),
+                entry_date: saleForm.sale_date || new Date().toLocaleDateString('sv-SE'),
                 status: saleForm.payment_status || 'pending',
                 category: saleCategory?.name || 'Venda de Produtos',
                 category_id: saleCategory?.id,
@@ -1712,8 +1714,8 @@ const AdminDashboard: React.FC = () => {
 
     const getFilteredFinancialEntries = () => {
         return financialEntries.filter(e => {
-            const dateToCompare = financialFilters.dateType === 'created_at'
-                ? (e.created_at || '').split('T')[0]
+            const dateToCompare = financialFilters.dateType === 'entry_date'
+                ? (e.entry_date || '').split('T')[0]
                 : e.due_date.split('T')[0];
 
             if (financialFilters.startDate && dateToCompare < financialFilters.startDate) return false;
@@ -3359,7 +3361,7 @@ const AdminDashboard: React.FC = () => {
                                                         className="bg-gray-50 border-none rounded-2xl px-4 py-3.5 text-xs font-bold text-gray-600 focus:ring-2 ring-primary/20"
                                                     >
                                                         <option value="due_date">Data de Vencimento</option>
-                                                        <option value="created_at">Data de Inclusão</option>
+                                                        <option value="entry_date">Data de Inclusão</option>
                                                     </select>
                                                 </div>
                                                 <div className="flex flex-col gap-1.5">
