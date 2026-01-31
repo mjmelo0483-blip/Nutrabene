@@ -4481,17 +4481,17 @@ const AdminDashboard: React.FC = () => {
                                     <input type="text" value={editingClient?.name || ''} onChange={e => setEditingClient({ ...editingClient, name: e.target.value })} placeholder="Nome Completo" className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input type="email" value={editingClient?.email || ''} onChange={e => setEditingClient({ ...editingClient, email: e.target.value })} placeholder="Email Principal" className="p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
-                                    <input type="text" value={editingClient?.whatsapp || ''} onChange={e => setEditingClient({ ...editingClient, whatsapp: e.target.value })} placeholder="WhatsApp" className="p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                    <input type="email" value={editingClient?.email || ''} onChange={e => setEditingClient({ ...editingClient, email: e.target.value })} placeholder="Email Principal" className="p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" />
+                                    <input type="text" value={editingClient?.whatsapp || ''} onChange={e => setEditingClient({ ...editingClient, whatsapp: e.target.value })} placeholder="WhatsApp" className="p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <label className="block">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nascimento</span>
-                                        <input type="date" value={editingClient?.birth_date || ''} onChange={setEditingClient && (e => setEditingClient({ ...editingClient, birth_date: e.target.value }))} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                        <input type="date" value={editingClient?.birth_date || ''} onChange={setEditingClient && (e => setEditingClient({ ...editingClient, birth_date: e.target.value }))} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" />
                                     </label>
                                     <label className="block">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Check-in Sono</span>
-                                        <input type="time" value={editingClient?.sleep_schedule || ''} onChange={setEditingClient && (e => setEditingClient({ ...editingClient, sleep_schedule: e.target.value }))} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" required />
+                                        <input type="time" value={editingClient?.sleep_schedule || ''} onChange={setEditingClient && (e => setEditingClient({ ...editingClient, sleep_schedule: e.target.value }))} className="w-full p-4 border-none rounded-2xl bg-gray-50 mt-1 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all" />
                                     </label>
                                 </div>
                                 <div className="space-y-2">

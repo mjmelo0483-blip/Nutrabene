@@ -116,13 +116,18 @@ Deno.serve(async (req) => {
         const results = [];
 
         for (const user of users || []) {
-            let whatsapp = user.whatsapp.replace(/\D/g, '');
+            let whatsapp = (user.whatsapp || '').replace(/\D/g, '');
+            if (!whatsapp) {
+                console.log(`[Skipping] User ${user.email || user.id} has no valid WhatsApp number.`);
+                continue;
+            }
+
             // Simple normalization for Brazil - only if not already prefixed with 55
             if (!whatsapp.startsWith('55') && (whatsapp.length === 10 || whatsapp.length === 11)) {
                 whatsapp = '55' + whatsapp;
             }
 
-            const name = user.name.split(' ')[0];
+            const name = (user.name || 'Cliente').split(' ')[0];
             const finalizedMessage = messageTemplate.replace('{nome}', name);
 
             console.log(`[Sending] User: ${user.email} | Phone: ${whatsapp}`);
