@@ -57,6 +57,7 @@ interface BankAccount {
     id: string;
     name: string;
     balance: number;
+    initial_balance: number;
     initial_balance_date?: string;
 }
 
@@ -206,7 +207,7 @@ const AdminDashboard: React.FC = () => {
     });
 
     const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
-    const [accountForm, setAccountForm] = useState<Partial<BankAccount>>({ balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') });
+    const [accountForm, setAccountForm] = useState<Partial<BankAccount>>({ balance: 0, initial_balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') });
 
     const [isCardModalOpen, setIsCardModalOpen] = useState(false);
     const [cardForm, setCardForm] = useState<Partial<CreditCard>>({ limit_amount: 0, current_balance: 0 });
@@ -1811,12 +1812,15 @@ const AdminDashboard: React.FC = () => {
             }
         );
     }
-
     // --- Accounts/Cards/Categories Handlers ---
     async function handleSaveAccount(e: React.FormEvent) {
         e.preventDefault();
         let error;
-        const payload = { ...accountForm };
+        const payload = {
+            ...accountForm,
+            // When creating new account, set initial_balance equal to balance
+            initial_balance: accountForm.id ? accountForm.initial_balance : (accountForm.balance || 0)
+        };
         if (accountForm.id) {
             const { id, ...data } = payload;
             const { error: err } = await supabase.from('bank_accounts').update(data).eq('id', id);
@@ -1829,7 +1833,7 @@ const AdminDashboard: React.FC = () => {
         else {
             showNotification(accountForm.id ? 'Conta atualizada!' : 'Conta criada!');
             setIsAccountModalOpen(false);
-            setAccountForm({ balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') });
+            setAccountForm({ balance: 0, initial_balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') });
             fetchData();
         }
     }
@@ -1937,52 +1941,33 @@ const AdminDashboard: React.FC = () => {
         }, 0);
 
         // Calculate Initial Balance for the period
-        // Formula: Sum of (bank initial balance + entries between initial_balance_date and period start)
+        // Formula: Sum of bank initial balances + entries (by due_date) between initial_balance_date and period start
         let initialBalance = 0;
 
         bankAccounts.forEach(bank => {
             const bankInitialDate = bank.initial_balance_date || '1900-01-01';
 
-            // If bank's initial date is on or before period start, include its balance
-            if (bankInitialDate <= periodStartStr) {
-                // Start with the bank's registered initial balance
-                initialBalance += bank.balance;
+            // Only include banks that existed before the period
+            if (bankInitialDate < periodStartStr) {
+                // Start with the bank's FIXED initial balance (not current balance)
+                initialBalance += (bank.initial_balance || 0);
 
-                // Get all entries for this bank with due_date between bank's initial date and period start
-                // We need to REVERSE engineer because bank.balance is CURRENT, not initial
-                // We subtract what happened after the initial_date to get back to initial
-                const entriesFromInitialToPeriodStart = financialEntries.filter(e => {
+                // Add entries that happened between initial_balance_date and period start
+                // These are entries that affect the balance before this period
+                const entriesBetweenDates = financialEntries.filter(e => {
                     const dueDate = e.due_date.split('T')[0];
                     return e.bank_account_id === bank.id &&
-                        e.status === 'paid' &&
-                        dueDate > bankInitialDate &&
+                        dueDate >= bankInitialDate &&
                         dueDate < periodStartStr &&
-                        e.payment_method !== 'transfer';
+                        e.payment_method !== 'transfer' &&
+                        e.payment_method !== 'investment';
                 });
 
-                // Reverse the effect of these entries (they're in current balance but shouldn't be in initial)
-                entriesFromInitialToPeriodStart.forEach(e => {
+                entriesBetweenDates.forEach(e => {
                     if (e.type === 'receivable') {
-                        initialBalance -= e.amount; // Was added to balance, remove it
-                    } else {
-                        initialBalance += e.amount; // Was subtracted from balance, add it back
-                    }
-                });
-
-                // Also reverse entries in the current period
-                const entriesInPeriod = financialEntries.filter(e => {
-                    const dueDate = e.due_date.split('T')[0];
-                    return e.bank_account_id === bank.id &&
-                        e.status === 'paid' &&
-                        dueDate >= periodStartStr &&
-                        e.payment_method !== 'transfer';
-                });
-
-                entriesInPeriod.forEach(e => {
-                    if (e.type === 'receivable') {
-                        initialBalance -= e.amount;
-                    } else {
                         initialBalance += e.amount;
+                    } else {
+                        initialBalance -= e.amount;
                     }
                 });
             }
