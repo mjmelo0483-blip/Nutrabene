@@ -1887,6 +1887,11 @@ const AdminDashboard: React.FC = () => {
             ? baseDateStr
             : `${baseYear}-${baseMonth}-01`;
 
+        const periodEndStr = cashFlowMode === 'daily'
+            ? baseDateStr
+            : `${baseYear}-${baseMonth}-${new Date(baseYear, cfBaseDate.getMonth() + 1, 0).getDate().toString().padStart(2, '0')}`;
+
+        // Filter entries for the current period
         const filteredEntries = financialEntries.filter(e => {
             const entryDateStr = e.due_date.split('T')[0];
             if (cashFlowMode === 'daily') {
@@ -1931,18 +1936,57 @@ const AdminDashboard: React.FC = () => {
             return acc + (e.type === 'payable' ? e.amount : -e.amount);
         }, 0);
 
-        const currentBankTotal = bankAccounts.reduce((acc, b) => acc + b.balance, 0);
+        // Calculate Initial Balance for the period
+        // Formula: Sum of (bank initial balance + entries between initial_balance_date and period start)
+        let initialBalance = 0;
 
-        // Cumulative & Projected Balance Logic using string comparison for stability
-        const netPendingBeforePeriod = financialEntries
-            .filter(e => e.status !== 'paid' && e.due_date.split('T')[0] < periodStartStr && e.payment_method !== 'transfer')
-            .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
+        bankAccounts.forEach(bank => {
+            const bankInitialDate = bank.initial_balance_date || '1900-01-01';
 
-        const netPaidOnOrAfterPeriod = financialEntries
-            .filter(e => e.status === 'paid' && e.due_date.split('T')[0] >= periodStartStr && e.payment_method !== 'transfer')
-            .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
+            // If bank's initial date is on or before period start, include its balance
+            if (bankInitialDate <= periodStartStr) {
+                // Start with the bank's registered initial balance
+                initialBalance += bank.balance;
 
-        const initialBalance = currentBankTotal + netPendingBeforePeriod - netPaidOnOrAfterPeriod;
+                // Get all entries for this bank with due_date between bank's initial date and period start
+                // We need to REVERSE engineer because bank.balance is CURRENT, not initial
+                // We subtract what happened after the initial_date to get back to initial
+                const entriesFromInitialToPeriodStart = financialEntries.filter(e => {
+                    const dueDate = e.due_date.split('T')[0];
+                    return e.bank_account_id === bank.id &&
+                        e.status === 'paid' &&
+                        dueDate > bankInitialDate &&
+                        dueDate < periodStartStr &&
+                        e.payment_method !== 'transfer';
+                });
+
+                // Reverse the effect of these entries (they're in current balance but shouldn't be in initial)
+                entriesFromInitialToPeriodStart.forEach(e => {
+                    if (e.type === 'receivable') {
+                        initialBalance -= e.amount; // Was added to balance, remove it
+                    } else {
+                        initialBalance += e.amount; // Was subtracted from balance, add it back
+                    }
+                });
+
+                // Also reverse entries in the current period
+                const entriesInPeriod = financialEntries.filter(e => {
+                    const dueDate = e.due_date.split('T')[0];
+                    return e.bank_account_id === bank.id &&
+                        e.status === 'paid' &&
+                        dueDate >= periodStartStr &&
+                        e.payment_method !== 'transfer';
+                });
+
+                entriesInPeriod.forEach(e => {
+                    if (e.type === 'receivable') {
+                        initialBalance -= e.amount;
+                    } else {
+                        initialBalance += e.amount;
+                    }
+                });
+            }
+        });
 
         return {
             filteredEntries,
