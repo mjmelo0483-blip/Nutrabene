@@ -289,6 +289,20 @@ const AdminDashboard: React.FC = () => {
         updateReseller: false
     });
 
+    const [isBulkEditFinancialModalOpen, setIsBulkEditFinancialModalOpen] = useState(false);
+    const [bulkEditFinancialForm, setBulkEditFinancialForm] = useState({
+        due_date: '',
+        category_id: '',
+        bank_account_id: '',
+        status: '',
+        payment_method: '',
+        updateDueDate: false,
+        updateCategory: false,
+        updateBank: false,
+        updateStatus: false,
+        updatePaymentMethod: false
+    });
+
     const [salesFilters, setSalesFilters] = useState({
         startDate: '',
         endDate: '',
@@ -1845,6 +1859,65 @@ const AdminDashboard: React.FC = () => {
                 }
             }
         );
+    }
+
+    async function handleBulkEditFinancial() {
+        if (selectedEntries.size === 0) return;
+
+        const updates: any = {};
+        if (bulkEditFinancialForm.updateDueDate && bulkEditFinancialForm.due_date) {
+            updates.due_date = bulkEditFinancialForm.due_date;
+        }
+        if (bulkEditFinancialForm.updateCategory && bulkEditFinancialForm.category_id) {
+            const cat = categories.find(c => c.id === bulkEditFinancialForm.category_id);
+            updates.category_id = bulkEditFinancialForm.category_id;
+            updates.category = cat?.name || '';
+        }
+        if (bulkEditFinancialForm.updateBank) {
+            updates.bank_account_id = bulkEditFinancialForm.bank_account_id || null;
+        }
+        if (bulkEditFinancialForm.updateStatus && bulkEditFinancialForm.status) {
+            updates.status = bulkEditFinancialForm.status;
+            if (bulkEditFinancialForm.status === 'paid') {
+                updates.payment_date = new Date().toLocaleDateString('sv-SE');
+            }
+        }
+        if (bulkEditFinancialForm.updatePaymentMethod && bulkEditFinancialForm.payment_method) {
+            updates.payment_method = bulkEditFinancialForm.payment_method;
+        }
+
+        if (Object.keys(updates).length === 0) {
+            showNotification('Selecione pelo menos um campo para alterar!', 'error');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const entryIds = Array.from(selectedEntries);
+            const { error } = await supabase.from('financial_entries').update(updates).in('id', entryIds);
+            if (error) throw error;
+
+            showNotification(`${selectedEntries.size} lançamentos atualizados com sucesso!`);
+            setIsBulkEditFinancialModalOpen(false);
+            setSelectedEntries(new Set());
+            setBulkEditFinancialForm({
+                due_date: '',
+                category_id: '',
+                bank_account_id: '',
+                status: '',
+                payment_method: '',
+                updateDueDate: false,
+                updateCategory: false,
+                updateBank: false,
+                updateStatus: false,
+                updatePaymentMethod: false
+            });
+            fetchData();
+        } catch (err: any) {
+            showNotification(`Erro ao editar em lote: ${err.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
     }
 
     async function handleBulkMarkAsPaid() {
@@ -4048,6 +4121,12 @@ const AdminDashboard: React.FC = () => {
                                             <span className="material-symbols-outlined text-sm">check_circle</span> Liquidar
                                         </button>
                                         <button
+                                            onClick={() => setIsBulkEditFinancialModalOpen(true)}
+                                            className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 rounded-xl transition-colors text-xs font-black uppercase tracking-widest text-blue-400"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">edit</span> Alterar
+                                        </button>
+                                        <button
                                             onClick={handleBulkDelete}
                                             className="flex items-center gap-2 px-4 py-2 hover:bg-white/10 rounded-xl transition-colors text-xs font-black uppercase tracking-widest text-red-500"
                                         >
@@ -5947,6 +6026,164 @@ const AdminDashboard: React.FC = () => {
                             >
                                 <span className="material-symbols-outlined text-sm">check</span>
                                 Aplicar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Edit Financial Modal */}
+            {isBulkEditFinancialModalOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-md rounded-[32px] p-8 shadow-2xl animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh]">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 className="text-2xl font-black text-gray-800">Editar Financeiro</h2>
+                                <p className="text-xs text-gray-400 mt-1">{selectedEntries.size} lançamentos selecionados</p>
+                            </div>
+                            <button onClick={() => setIsBulkEditFinancialModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selecione os campos para alterar:</p>
+
+                            {/* Data de Vencimento */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditFinancialForm.updateDueDate ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditFinancialForm.updateDueDate}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, updateDueDate: e.target.checked })}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Data de Vencimento</span>
+                                </label>
+                                {bulkEditFinancialForm.updateDueDate && (
+                                    <input
+                                        type="date"
+                                        value={bulkEditFinancialForm.due_date}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, due_date: e.target.value })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none"
+                                    />
+                                )}
+                            </div>
+
+                            {/* Categoria */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditFinancialForm.updateCategory ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditFinancialForm.updateCategory}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, updateCategory: e.target.checked })}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Categoria</span>
+                                </label>
+                                {bulkEditFinancialForm.updateCategory && (
+                                    <select
+                                        value={bulkEditFinancialForm.category_id}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, category_id: e.target.value })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Selecione a categoria</option>
+                                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                )}
+                            </div>
+
+                            {/* Conta Bancária */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditFinancialForm.updateBank ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditFinancialForm.updateBank}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, updateBank: e.target.checked })}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Conta Bancária</span>
+                                </label>
+                                {bulkEditFinancialForm.updateBank && (
+                                    <select
+                                        value={bulkEditFinancialForm.bank_account_id}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, bank_account_id: e.target.value })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Nenhuma (Opcional)</option>
+                                        {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                    </select>
+                                )}
+                            </div>
+
+                            {/* Status */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditFinancialForm.updateStatus ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditFinancialForm.updateStatus}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, updateStatus: e.target.checked })}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Status</span>
+                                </label>
+                                {bulkEditFinancialForm.updateStatus && (
+                                    <select
+                                        value={bulkEditFinancialForm.status}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, status: e.target.value })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Selecione o status</option>
+                                        <option value="pending">Pendente</option>
+                                        <option value="paid">Pago</option>
+                                        <option value="overdue">Atrasado</option>
+                                    </select>
+                                )}
+                            </div>
+
+                            {/* Meio de Pagamento */}
+                            <div className={`p-4 rounded-2xl border transition-all ${bulkEditFinancialForm.updatePaymentMethod ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkEditFinancialForm.updatePaymentMethod}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, updatePaymentMethod: e.target.checked })}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                                    />
+                                    <span className="text-xs font-black text-gray-600 uppercase">Meio de Pagamento</span>
+                                </label>
+                                {bulkEditFinancialForm.updatePaymentMethod && (
+                                    <select
+                                        value={bulkEditFinancialForm.payment_method}
+                                        onChange={e => setBulkEditFinancialForm({ ...bulkEditFinancialForm, payment_method: e.target.value as any })}
+                                        className="w-full mt-3 p-4 border-none rounded-xl bg-white focus:ring-4 ring-blue-100 outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="">Selecione o meio</option>
+                                        <option value="pix">PIX</option>
+                                        <option value="credit_card">Cartão de Crédito</option>
+                                        <option value="debit_card">Cartão de Débito</option>
+                                        <option value="cash">Dinheiro</option>
+                                        <option value="other">Outro</option>
+                                    </select>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex space-x-4 pt-6">
+                            <button
+                                type="button"
+                                onClick={() => setIsBulkEditFinancialModalOpen(false)}
+                                className="flex-1 py-4 font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleBulkEditFinancial}
+                                disabled={loading}
+                                className="flex-[2] bg-blue-500 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-200 hover:shadow-blue-300 hover:-translate-y-1 transition-all flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-sm">check</span>
+                                {loading ? 'Processando...' : 'Aplicar Alterações'}
                             </button>
                         </div>
                     </div>
