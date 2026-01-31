@@ -253,6 +253,7 @@ const AdminDashboard: React.FC = () => {
 
     const [isInvestmentModalOpen, setIsInvestmentModalOpen] = useState(false);
     const [investmentForm, setInvestmentForm] = useState({
+        id: '',
         name: '',
         bankAccountId: '',
         type: 'application' as 'application' | 'redemption',
@@ -1633,6 +1634,7 @@ const AdminDashboard: React.FC = () => {
     function closeInvestmentModal() {
         setIsInvestmentModalOpen(false);
         setInvestmentForm({
+            id: '',
             name: '',
             bankAccountId: '',
             type: 'application',
@@ -1653,22 +1655,34 @@ const AdminDashboard: React.FC = () => {
 
         setLoading(true);
         try {
-            const bank = bankAccounts.find(b => b.id === investmentForm.bankAccountId);
+            const isInitial = investmentForm.isInitial;
+            const isApp = investmentForm.type === 'application';
+            const bank = isInitial ? null : bankAccounts.find(b => b.id === investmentForm.bankAccountId);
 
-            // If NOT initial investment, bank must exist
-            if (!investmentForm.isInitial && !bank) {
+            if (!isInitial && !bank) {
                 throw new Error('Conta bancária não encontrada');
             }
 
             const invCategory = categories.find(c => c.name === 'Investimento') ||
                 categories.find(c => c.name.toLowerCase().includes('invest'));
 
-            const isApp = investmentForm.type === 'application';
-            const isInitial = investmentForm.isInitial;
+            // 1. If EDITING, reverse old balance impact first
+            if (investmentForm.id) {
+                const oldEntry = financialEntries.find(ent => ent.id === investmentForm.id);
+                if (oldEntry && !oldEntry.description.startsWith('Investimento Inicial') && oldEntry.bank_account_id) {
+                    const oldBank = bankAccounts.find(b => b.id === oldEntry.bank_account_id);
+                    if (oldBank) {
+                        const reversedBalance = oldEntry.type === 'payable' ? oldBank.balance + oldEntry.amount : oldBank.balance - oldEntry.amount;
+                        await supabase.from('bank_accounts').update({ balance: reversedBalance }).eq('id', oldBank.id);
 
-            // 1. Criar lançamento financeiro
-            const investmentId = crypto.randomUUID();
-            const { error: errEntry } = await supabase.from('financial_entries').insert([{
+                        // Update local copy of bank for the next balance change if it's the same bank
+                        if (bank && oldBank.id === bank.id) bank.balance = reversedBalance;
+                    }
+                }
+            }
+
+            // 2. Prepare Payload
+            const payload = {
                 type: isApp ? 'payable' : 'receivable',
                 description: `${isInitial ? 'Investimento Inicial' : (isApp ? 'Aplicação' : 'Resgate')}: ${investmentForm.name}${investmentForm.description ? ' - ' + investmentForm.description : ''}`,
                 amount: investmentForm.amount,
@@ -1679,18 +1693,27 @@ const AdminDashboard: React.FC = () => {
                 payment_method: 'investment',
                 bank_account_id: isInitial ? null : investmentForm.bankAccountId,
                 category: invCategory?.name || 'Investimento',
-                category_id: invCategory?.id,
-                investment_id: investmentId
-            }]);
-            if (errEntry) throw errEntry;
+                category_id: invCategory?.id
+            };
 
-            // 2. Atualizar saldo do banco (Apenas se NÃO for investimento inicial)
+            if (investmentForm.id) {
+                const { error: errUpdate } = await supabase.from('financial_entries').update(payload).eq('id', investmentForm.id);
+                if (errUpdate) throw errUpdate;
+            } else {
+                const { error: errEntry } = await supabase.from('financial_entries').insert([{
+                    ...payload,
+                    investment_id: crypto.randomUUID()
+                }]);
+                if (errEntry) throw errEntry;
+            }
+
+            // 3. Apply new balance impact (Apenas se NÃO for investimento inicial)
             if (!isInitial && bank) {
                 const newBankBalance = isApp ? bank.balance - investmentForm.amount : bank.balance + investmentForm.amount;
                 await supabase.from('bank_accounts').update({ balance: newBankBalance }).eq('id', bank.id);
             }
 
-            showNotification(isInitial ? 'Investimento inicial registrado!' : (isApp ? 'Aplicação realizada!' : 'Resgate realizado!'));
+            showNotification(investmentForm.id ? 'Movimentação atualizada!' : (isInitial ? 'Investimento inicial registrado!' : (isApp ? 'Aplicação realizada!' : 'Resgate realizado!')));
             closeInvestmentModal();
             fetchData();
         } catch (err: any) {
@@ -1698,6 +1721,57 @@ const AdminDashboard: React.FC = () => {
         } finally {
             setLoading(false);
         }
+    }
+
+    async function handleDeleteInvestment(id: string) {
+        if (!confirm('Tem certeza que deseja excluir esta movimentação de investimento?')) return;
+
+        setLoading(true);
+        try {
+            const entry = financialEntries.find(e => e.id === id);
+            if (!entry) throw new Error('Movimentação não encontrada');
+
+            // 1. Reverse bank balance if it wasn't an initial investment
+            const isInitial = entry.description.startsWith('Investimento Inicial');
+            if (!isInitial && entry.bank_account_id) {
+                const bank = bankAccounts.find(b => b.id === entry.bank_account_id);
+                if (bank) {
+                    // Reverse the logic: if we paid (application), we add it back. If we received (redemption), we subtract it.
+                    const reversedBalance = entry.type === 'payable' ? bank.balance + entry.amount : bank.balance - entry.amount;
+                    await supabase.from('bank_accounts').update({ balance: reversedBalance }).eq('id', bank.id);
+                }
+            }
+
+            // 2. Delete entry
+            const { error: err } = await supabase.from('financial_entries').delete().eq('id', id);
+            if (err) throw err;
+
+            showNotification('Movimentação excluída!');
+            fetchData();
+        } catch (err: any) {
+            showNotification(`Erro ao excluir: ${err.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function handleEditInvestment(entry: FinancialEntry) {
+        const isInitial = entry.description.startsWith('Investimento Inicial');
+        const descParts = entry.description.replace(/^(Aplicação|Resgate|Investimento|Investimento Inicial):\s*/i, '').split(' - ');
+        const name = descParts[0] || '';
+        const detail = descParts.slice(1).join(' - ') || '';
+
+        setInvestmentForm({
+            id: entry.id,
+            name: name,
+            bankAccountId: entry.bank_account_id || '',
+            type: entry.type === 'payable' ? 'application' : 'redemption',
+            amount: entry.amount,
+            date: entry.due_date.split('T')[0],
+            description: detail,
+            isInitial: isInitial
+        });
+        setIsInvestmentModalOpen(true);
     }
 
     async function handleMarkAsPaid(entry: FinancialEntry) {
@@ -3907,6 +3981,7 @@ const AdminDashboard: React.FC = () => {
                                                                         <th className="px-6 py-4">Tipo</th>
                                                                         <th className="px-6 py-4">Conta</th>
                                                                         <th className="px-6 py-4 text-right">Valor</th>
+                                                                        <th className="px-6 py-4 text-center">Ações</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody className="divide-y divide-gray-100/50">
@@ -3927,6 +4002,16 @@ const AdminDashboard: React.FC = () => {
                                                                             <td className="px-6 py-4 text-gray-500 font-medium">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || '-'}</td>
                                                                             <td className={`px-6 py-4 text-right font-black whitespace-nowrap ${e.type === 'payable' ? 'text-purple-600' : 'text-green-600'}`}>
                                                                                 {e.type === 'payable' ? '-' : '+'} R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                            </td>
+                                                                            <td className="px-6 py-4">
+                                                                                <div className="flex items-center justify-center gap-2">
+                                                                                    <button onClick={() => handleEditInvestment(e)} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                                        <span className="material-symbols-outlined text-xs">edit</span>
+                                                                                    </button>
+                                                                                    <button onClick={() => handleDeleteInvestment(e.id)} className="h-7 w-7 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                                        <span className="material-symbols-outlined text-xs">delete</span>
+                                                                                    </button>
+                                                                                </div>
                                                                             </td>
                                                                         </tr>
                                                                     ))}
@@ -5608,8 +5693,8 @@ const AdminDashboard: React.FC = () => {
                     <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-8">
                             <div>
-                                <h2 className="text-2xl font-black text-gray-800">Movimento de Investimento</h2>
-                                <p className="text-xs text-gray-400 mt-1">Aplicar ou resgatar investimentos</p>
+                                <h2 className="text-2xl font-black text-gray-800">{investmentForm.id ? 'Editar Movimento' : 'Movimento de Investimento'}</h2>
+                                <p className="text-xs text-gray-400 mt-1">{investmentForm.id ? 'Altere os dados da movimentação' : 'Aplicar ou resgatar investimentos'}</p>
                             </div>
                             <button onClick={closeInvestmentModal} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
                                 <span className="material-symbols-outlined">close</span>
@@ -5728,7 +5813,7 @@ const AdminDashboard: React.FC = () => {
                                 <button type="button" onClick={() => setIsInvestmentModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Cancelar</button>
                                 <button type="submit" disabled={loading} className={`flex-[2] text-white py-5 rounded-[20px] font-black shadow-xl hover:-translate-y-1 transition-all flex items-center justify-center gap-2 ${investmentForm.type === 'application' ? 'bg-purple-500 shadow-purple-200' : 'bg-green-500 shadow-green-200'}`}>
                                     <span className="material-symbols-outlined">{investmentForm.type === 'application' ? 'trending_up' : 'trending_down'}</span>
-                                    {loading ? 'Processando...' : investmentForm.type === 'application' ? 'Aplicar' : 'Resgatar'}
+                                    {loading ? 'Processando...' : (investmentForm.id ? 'Atualizar Movimento' : (investmentForm.type === 'application' ? 'Aplicar' : 'Resgatar'))}
                                 </button>
                             </div>
                         </form>
