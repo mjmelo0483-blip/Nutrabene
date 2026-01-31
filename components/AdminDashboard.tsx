@@ -75,10 +75,12 @@ interface FinancialEntry {
     sale_id?: string;
     created_at?: string;
     entry_date?: string;
-    payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash' | 'other' | 'credit_acc';
+    payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash' | 'other' | 'credit_acc' | 'transfer' | 'investment';
     credit_card_id?: string;
     installments_total?: number;
     installment_number?: number;
+    transfer_id?: string;
+    investment_id?: string;
 }
 
 interface Sale {
@@ -238,7 +240,26 @@ const AdminDashboard: React.FC = () => {
     const [cfBaseDate, setCfBaseDate] = useState<Date>(new Date());
     const [expandedCFGroups, setExpandedCFGroups] = useState<Set<string>>(new Set());
 
-    const [financeViewMode, setFinanceViewMode] = useState<'dashboard' | 'list'>('dashboard');
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+    const [transferForm, setTransferForm] = useState({
+        fromAccountId: '',
+        toAccountId: '',
+        amount: 0,
+        date: new Date().toLocaleDateString('sv-SE'),
+        description: 'Transferência entre contas'
+    });
+
+    const [isInvestmentModalOpen, setIsInvestmentModalOpen] = useState(false);
+    const [investmentForm, setInvestmentForm] = useState({
+        name: '',
+        bankAccountId: '',
+        type: 'application' as 'application' | 'redemption',
+        amount: 0,
+        date: new Date().toLocaleDateString('sv-SE'),
+        description: ''
+    });
+
+    const [financeViewMode, setFinanceViewMode] = useState<'dashboard' | 'list' | 'investments'>('dashboard');
     const [financialFilters, setFinancialFilters] = useState({
         startDate: '',
         endDate: '',
@@ -1535,6 +1556,125 @@ const AdminDashboard: React.FC = () => {
         }
     }
 
+    async function handleSaveTransfer(e: React.FormEvent) {
+        e.preventDefault();
+        if (!transferForm.fromAccountId || !transferForm.toAccountId || transferForm.amount <= 0) {
+            showNotification('Preencha as contas e um valor válido!', 'error');
+            return;
+        }
+
+        if (transferForm.fromAccountId === transferForm.toAccountId) {
+            showNotification('As contas de origem e destino devem ser diferentes!', 'error');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const transferId = crypto.randomUUID();
+            const fromBank = bankAccounts.find(b => b.id === transferForm.fromAccountId);
+            const toBank = bankAccounts.find(b => b.id === transferForm.toAccountId);
+
+            if (!fromBank || !toBank) throw new Error('Contas não encontradas');
+
+            const transferCategory = categories.find(c => c.name === 'Transferência') ||
+                categories.find(c => c.name.toLowerCase().includes('transf'));
+
+            // 1. Saída da conta origem
+            const { error: err1 } = await supabase.from('financial_entries').insert([{
+                type: 'payable',
+                description: transferForm.description,
+                amount: transferForm.amount,
+                due_date: transferForm.date,
+                entry_date: transferForm.date,
+                payment_date: transferForm.date,
+                status: 'paid',
+                payment_method: 'transfer',
+                bank_account_id: transferForm.fromAccountId,
+                category: transferCategory?.name || 'Transferência',
+                category_id: transferCategory?.id,
+                transfer_id: transferId
+            }]);
+            if (err1) throw err1;
+
+            // 2. Entrada na conta destino
+            const { error: err2 } = await supabase.from('financial_entries').insert([{
+                type: 'receivable',
+                description: transferForm.description,
+                amount: transferForm.amount,
+                due_date: transferForm.date,
+                entry_date: transferForm.date,
+                payment_date: transferForm.date,
+                status: 'paid',
+                payment_method: 'transfer',
+                bank_account_id: transferForm.toAccountId,
+                category: transferCategory?.name || 'Transferência',
+                category_id: transferCategory?.id,
+                transfer_id: transferId
+            }]);
+            if (err2) throw err2;
+
+            // 3. Atualizar saldos
+            await supabase.from('bank_accounts').update({ balance: fromBank.balance - transferForm.amount }).eq('id', fromBank.id);
+            await supabase.from('bank_accounts').update({ balance: toBank.balance + transferForm.amount }).eq('id', toBank.id);
+
+            showNotification('Transferência realizada com sucesso!');
+            setIsTransferModalOpen(false);
+            fetchData();
+        } catch (err: any) {
+            showNotification(`Erro na transferência: ${err.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleSaveInvestmentMovement(e: React.FormEvent) {
+        e.preventDefault();
+        if (!investmentForm.bankAccountId || !investmentForm.name || investmentForm.amount <= 0) {
+            showNotification('Preencha os campos obrigatórios!', 'error');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const bank = bankAccounts.find(b => b.id === investmentForm.bankAccountId);
+            if (!bank) throw new Error('Conta bancária não encontrada');
+
+            const invCategory = categories.find(c => c.name === 'Investimento') ||
+                categories.find(c => c.name.toLowerCase().includes('invest'));
+
+            const isApp = investmentForm.type === 'application';
+
+            // 1. Criar lançamento financeiro
+            const { error: errEntry } = await supabase.from('financial_entries').insert([{
+                type: isApp ? 'payable' : 'receivable',
+                description: `Investimento: ${investmentForm.name}${investmentForm.description ? ' - ' + investmentForm.description : ''}`,
+                amount: investmentForm.amount,
+                due_date: investmentForm.date,
+                entry_date: investmentForm.date,
+                payment_date: investmentForm.date,
+                status: 'paid',
+                payment_method: 'investment',
+                bank_account_id: investmentForm.bankAccountId,
+                category: invCategory?.name || 'Investimento',
+                category_id: invCategory?.id,
+                investment_id: investmentForm.name // Usando nome como ID se não houver tabela
+            }]);
+            if (errEntry) throw errEntry;
+
+            // 2. Atualizar saldo do banco
+            const newBankBalance = isApp ? bank.balance - investmentForm.amount : bank.balance + investmentForm.amount;
+            await supabase.from('bank_accounts').update({ balance: newBankBalance }).eq('id', bank.id);
+
+            showNotification(isApp ? 'Aplicação realizada!' : 'Resgate realizado!');
+            setIsInvestmentModalOpen(false);
+            fetchData();
+        } catch (err: any) {
+            showNotification(`Erro no investimento: ${err.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
     async function handleMarkAsPaid(entry: FinancialEntry) {
         if (entry.status === 'paid') return;
 
@@ -1754,7 +1894,10 @@ const AdminDashboard: React.FC = () => {
             }
         });
 
-        const entriesByGroup = filteredEntries.reduce((acc: any, e) => {
+        // Filter out transfers and investments for regular cash flow totals
+        const operationalEntries = filteredEntries.filter(e => e.payment_method !== 'transfer' && e.payment_method !== 'investment');
+
+        const entriesByGroup = operationalEntries.reduce((acc: any, e) => {
             const catId = (e as any).category_id;
             const category = categories.find(c => c.id === catId);
             const groupKey = catId || 'unassigned';
@@ -1777,18 +1920,24 @@ const AdminDashboard: React.FC = () => {
         const incomeGroups = Object.values(entriesByGroup).filter((g: any) => g.type === 'income');
         const expenseGroups = Object.values(entriesByGroup).filter((g: any) => g.type === 'expense');
 
-        const totalIncome = filteredEntries.filter(e => e.type === 'receivable').reduce((acc, e) => acc + e.amount, 0);
-        const totalExpense = filteredEntries.filter(e => e.type === 'payable').reduce((acc, e) => acc + e.amount, 0);
+        const totalIncome = operationalEntries.filter(e => e.type === 'receivable').reduce((acc, e) => acc + e.amount, 0);
+        const totalExpense = operationalEntries.filter(e => e.type === 'payable').reduce((acc, e) => acc + e.amount, 0);
+
+        // Investment Metrics
+        const investmentEntries = filteredEntries.filter(e => e.payment_method === 'investment');
+        const totalInvestments = investmentEntries.reduce((acc, e) => {
+            return acc + (e.type === 'payable' ? e.amount : -e.amount);
+        }, 0);
 
         const currentBankTotal = bankAccounts.reduce((acc, b) => acc + b.balance, 0);
 
         // Cumulative & Projected Balance Logic using string comparison for stability
         const netPendingBeforePeriod = financialEntries
-            .filter(e => e.status !== 'paid' && e.due_date.split('T')[0] < periodStartStr)
+            .filter(e => e.status !== 'paid' && e.due_date.split('T')[0] < periodStartStr && e.payment_method !== 'transfer')
             .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
 
         const netPaidOnOrAfterPeriod = financialEntries
-            .filter(e => e.status === 'paid' && e.due_date.split('T')[0] >= periodStartStr)
+            .filter(e => e.status === 'paid' && e.due_date.split('T')[0] >= periodStartStr && e.payment_method !== 'transfer')
             .reduce((acc, e) => acc + (e.type === 'receivable' ? e.amount : -e.amount), 0);
 
         const initialBalance = currentBankTotal + netPendingBeforePeriod - netPaidOnOrAfterPeriod;
@@ -1799,6 +1948,7 @@ const AdminDashboard: React.FC = () => {
             expenseGroups,
             totalIncome,
             totalExpense,
+            totalInvestments,
             initialBalance
         };
     };
@@ -2933,7 +3083,7 @@ const AdminDashboard: React.FC = () => {
                 )}
                 {/* Finance Tab */}
                 {activeTab === 'finances' && (() => {
-                    const { incomeGroups, expenseGroups, totalIncome, totalExpense, initialBalance } = getCashFlowMetrics();
+                    const { incomeGroups, expenseGroups, totalIncome, totalExpense, totalInvestments, initialBalance } = getCashFlowMetrics();
                     const projectedBalance = initialBalance + totalIncome - totalExpense;
                     const filteredListEntries = getFilteredFinancialEntries();
 
@@ -2967,6 +3117,12 @@ const AdminDashboard: React.FC = () => {
                                         className={`flex items-center gap-2 px-8 py-3 rounded-[20px] text-[11px] font-black tracking-widest transition-all ${financeViewMode === 'list' ? 'bg-white text-primary shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
                                     >
                                         <span className="material-symbols-outlined text-sm">search</span> PESQUISA AVANÇADA
+                                    </button>
+                                    <button
+                                        onClick={() => setFinanceViewMode('investments')}
+                                        className={`flex items-center gap-2 px-8 py-3 rounded-[20px] text-[11px] font-black tracking-widest transition-all ${financeViewMode === 'investments' ? 'bg-white text-primary shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                                    >
+                                        <span className="material-symbols-outlined text-sm">payments</span> CARTEIRA INV.
                                     </button>
                                 </div>
                             </div>
@@ -3040,7 +3196,7 @@ const AdminDashboard: React.FC = () => {
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimentos</p>
                                                 <span className="material-symbols-outlined text-purple-100 group-hover:text-purple-400 transition-colors">payments</span>
                                             </div>
-                                            <p className="text-xl font-black text-gray-800">R$ 0,00</p>
+                                            <p className="text-xl font-black text-gray-800">R$ {totalInvestments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                         </div>
                                         <div className="bg-primary p-6 rounded-[32px] shadow-xl shadow-primary/20 group hover:scale-[1.02] transition-all">
                                             <div className="flex justify-between items-center mb-4">
@@ -3052,9 +3208,9 @@ const AdminDashboard: React.FC = () => {
                                     </div>
 
                                     {/* Actions Bar */}
-                                    <div className="flex gap-4">
+                                    <div className="flex flex-wrap gap-4">
                                         <div className="relative group">
-                                            <select className="bg-white border-none rounded-2xl px-6 py-4 text-xs font-black text-gray-500 shadow-sm appearance-none pr-12 cursor-pointer focus:ring-4 ring-primary/5 transition-all">
+                                            <select className="bg-white border rounded-2xl px-6 py-4 text-xs font-black text-gray-500 shadow-sm appearance-none pr-12 cursor-pointer focus:ring-4 ring-primary/5 transition-all">
                                                 <option>Todas as Contas</option>
                                                 {bankAccounts.map(b => <option key={b.id}>{b.name}</option>)}
                                             </select>
@@ -3073,6 +3229,24 @@ const AdminDashboard: React.FC = () => {
                                             className="bg-primary text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-primary/20 flex items-center hover:scale-105 active:scale-95 transition-all"
                                         >
                                             <span className="material-symbols-outlined mr-2">add</span> NOVO LANÇAMENTO
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setTransferForm({ ...transferForm, date: new Date().toLocaleDateString('sv-SE') });
+                                                setIsTransferModalOpen(true);
+                                            }}
+                                            className="bg-white text-gray-700 px-6 py-4 rounded-2xl font-black shadow-sm border border-gray-100 flex items-center hover:bg-gray-50 transition-all"
+                                        >
+                                            <span className="material-symbols-outlined mr-2 text-primary">sync_alt</span> TRANSFERIR
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setInvestmentForm({ ...investmentForm, date: new Date().toLocaleDateString('sv-SE') });
+                                                setIsInvestmentModalOpen(true);
+                                            }}
+                                            className="bg-purple-50 text-purple-600 px-6 py-4 rounded-2xl font-black shadow-sm border border-purple-100 flex items-center hover:bg-purple-100 transition-all"
+                                        >
+                                            <span className="material-symbols-outlined mr-2">trending_up</span> INVESTIR
                                         </button>
                                     </div>
 
@@ -3284,7 +3458,7 @@ const AdminDashboard: React.FC = () => {
                                         </div>
                                     </section>
                                 </>
-                            ) : (
+                            ) : financeViewMode === 'list' ? (
                                 <section className="space-y-6">
                                     <div className="bg-white p-8 rounded-[40px] border shadow-sm">
                                         <div className="flex flex-col gap-6">
@@ -3542,6 +3716,162 @@ const AdminDashboard: React.FC = () => {
                                             </table>
                                         </div>
                                     </div>
+                                </section>
+                            ) : (
+                                /* Investments View */
+                                <section className="space-y-6">
+                                    {/* Investments Header */}
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                                        <div>
+                                            <h1 className="text-3xl font-black text-gray-800">Carteira de Investimentos</h1>
+                                            <p className="text-sm text-gray-400 font-medium">Acompanhe suas aplicações e resgates.</p>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setInvestmentForm({ ...investmentForm, date: new Date().toLocaleDateString('sv-SE') });
+                                                setIsInvestmentModalOpen(true);
+                                            }}
+                                            className="bg-purple-500 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-purple-200 flex items-center hover:scale-105 active:scale-95 transition-all"
+                                        >
+                                            <span className="material-symbols-outlined mr-2">add</span> NOVO MOVIMENTO
+                                        </button>
+                                    </div>
+
+                                    {/* Investment Summary Cards */}
+                                    {(() => {
+                                        const investmentEntries = financialEntries.filter(e => e.payment_method === 'investment');
+                                        const totalApplications = investmentEntries.filter(e => e.type === 'payable').reduce((acc, e) => acc + e.amount, 0);
+                                        const totalRedemptions = investmentEntries.filter(e => e.type === 'receivable').reduce((acc, e) => acc + e.amount, 0);
+                                        const netInvested = totalApplications - totalRedemptions;
+
+                                        // Group by investment name
+                                        const investmentsByName = investmentEntries.reduce((acc: any, e) => {
+                                            const name = e.description.replace(/Aplicação: |Resgate: /g, '').trim();
+                                            if (!acc[name]) acc[name] = { applications: 0, redemptions: 0, entries: [] };
+                                            if (e.type === 'payable') acc[name].applications += e.amount;
+                                            else acc[name].redemptions += e.amount;
+                                            acc[name].entries.push(e);
+                                            return acc;
+                                        }, {});
+
+                                        return (
+                                            <>
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                                        <div className="flex justify-between items-center mb-4">
+                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Aplicado</p>
+                                                            <span className="material-symbols-outlined text-purple-200 group-hover:text-purple-400 transition-colors">trending_up</span>
+                                                        </div>
+                                                        <p className="text-xl font-black text-purple-600">R$ {totalApplications.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                    </div>
+                                                    <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                                        <div className="flex justify-between items-center mb-4">
+                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Resgatado</p>
+                                                            <span className="material-symbols-outlined text-green-200 group-hover:text-green-400 transition-colors">trending_down</span>
+                                                        </div>
+                                                        <p className="text-xl font-black text-green-600">R$ {totalRedemptions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                    </div>
+                                                    <div className="bg-purple-500 p-6 rounded-[32px] shadow-xl shadow-purple-200 group hover:scale-[1.02] transition-all">
+                                                        <div className="flex justify-between items-center mb-4">
+                                                            <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">Saldo Investido</p>
+                                                            <span className="material-symbols-outlined text-white/30 group-hover:text-white/60 transition-colors">account_balance</span>
+                                                        </div>
+                                                        <p className="text-xl font-black text-white">R$ {netInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Investments by Name */}
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="px-4 py-1.5 bg-purple-500/10 text-purple-500 text-[10px] font-black uppercase tracking-widest rounded-full">Meus Investimentos</span>
+                                                        <div className="h-px bg-gray-100 flex-1"></div>
+                                                    </div>
+
+                                                    {Object.keys(investmentsByName).length === 0 ? (
+                                                        <div className="bg-white rounded-3xl border p-12 text-center">
+                                                            <span className="material-symbols-outlined text-6xl text-gray-200 mb-4">payments</span>
+                                                            <p className="text-gray-400 font-bold text-sm">Nenhum investimento registrado</p>
+                                                            <p className="text-gray-300 text-xs mt-1">Clique no botão acima para registrar sua primeira aplicação</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                            {Object.entries(investmentsByName).map(([name, data]: [string, any]) => (
+                                                                <div key={name} className="bg-white p-6 rounded-3xl border shadow-sm hover:shadow-md transition-all">
+                                                                    <div className="flex items-center gap-4 mb-4">
+                                                                        <div className="h-12 w-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-500">
+                                                                            <span className="material-symbols-outlined">payments</span>
+                                                                        </div>
+                                                                        <div>
+                                                                            <h3 className="font-black text-gray-800">{name}</h3>
+                                                                            <p className="text-[10px] text-gray-400 uppercase tracking-widest">{data.entries.length} movimentos</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex justify-between text-xs">
+                                                                            <span className="text-gray-400">Aplicações</span>
+                                                                            <span className="font-bold text-purple-600">R$ {data.applications.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between text-xs">
+                                                                            <span className="text-gray-400">Resgates</span>
+                                                                            <span className="font-bold text-green-600">R$ {data.redemptions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                                        </div>
+                                                                        <div className="h-px bg-gray-100 my-2"></div>
+                                                                        <div className="flex justify-between text-sm">
+                                                                            <span className="font-bold text-gray-600">Saldo</span>
+                                                                            <span className="font-black text-gray-800">R$ {(data.applications - data.redemptions).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Investment History */}
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="px-4 py-1.5 bg-gray-100 text-gray-500 text-[10px] font-black uppercase tracking-widest rounded-full">Histórico de Movimentações</span>
+                                                        <div className="h-px bg-gray-100 flex-1"></div>
+                                                    </div>
+
+                                                    <div className="bg-white rounded-[40px] border shadow-sm overflow-hidden">
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-xs">
+                                                                <thead>
+                                                                    <tr className="bg-gray-50/50 text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                                                        <th className="px-6 py-4">Data</th>
+                                                                        <th className="px-6 py-4">Investimento</th>
+                                                                        <th className="px-6 py-4">Tipo</th>
+                                                                        <th className="px-6 py-4">Conta</th>
+                                                                        <th className="px-6 py-4 text-right">Valor</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-gray-100/50">
+                                                                    {investmentEntries.length === 0 ? (
+                                                                        <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-300 font-black uppercase tracking-widest">Nenhuma movimentação</td></tr>
+                                                                    ) : investmentEntries.sort((a, b) => b.due_date.localeCompare(a.due_date)).map(e => (
+                                                                        <tr key={e.id} className="hover:bg-gray-50/30 transition-colors">
+                                                                            <td className="px-6 py-4 font-bold text-gray-600">{formatDate(e.due_date)}</td>
+                                                                            <td className="px-6 py-4 font-black text-gray-800">{e.description.replace(/Aplicação: |Resgate: /g, '')}</td>
+                                                                            <td className="px-6 py-4">
+                                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${e.type === 'payable' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
+                                                                                    {e.type === 'payable' ? 'Aplicação' : 'Resgate'}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td className="px-6 py-4 text-gray-500 font-medium">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || '-'}</td>
+                                                                            <td className={`px-6 py-4 text-right font-black whitespace-nowrap ${e.type === 'payable' ? 'text-purple-600' : 'text-green-600'}`}>
+                                                                                {e.type === 'payable' ? '-' : '+'} R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </section>
                             )}
 
@@ -5093,6 +5423,222 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 )
             }
+
+            {/* Transfer Modal */}
+            {isTransferModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h2 className="text-2xl font-black text-gray-800">Transferência</h2>
+                                <p className="text-xs text-gray-400 mt-1">Mover fundos entre contas</p>
+                            </div>
+                            <button onClick={() => setIsTransferModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveTransfer} className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Conta de Origem</label>
+                                <select
+                                    value={transferForm.fromAccountId}
+                                    onChange={e => setTransferForm({ ...transferForm, fromAccountId: e.target.value })}
+                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                    required
+                                >
+                                    <option value="">Selecione a conta de origem</option>
+                                    {bankAccounts.map(b => (
+                                        <option key={b.id} value={b.id}>{b.name} - R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="flex justify-center">
+                                <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                                    <span className="material-symbols-outlined">arrow_downward</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Conta de Destino</label>
+                                <select
+                                    value={transferForm.toAccountId}
+                                    onChange={e => setTransferForm({ ...transferForm, toAccountId: e.target.value })}
+                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                    required
+                                >
+                                    <option value="">Selecione a conta de destino</option>
+                                    {bankAccounts.filter(b => b.id !== transferForm.fromAccountId).map(b => (
+                                        <option key={b.id} value={b.id}>{b.name} - R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Valor (R$)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={transferForm.amount || ''}
+                                    onChange={e => setTransferForm({ ...transferForm, amount: parseFloat(e.target.value) })}
+                                    placeholder="0,00"
+                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-bold text-lg"
+                                    required
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data</label>
+                                    <input
+                                        type="date"
+                                        value={transferForm.date}
+                                        onChange={e => setTransferForm({ ...transferForm, date: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Descrição</label>
+                                    <input
+                                        type="text"
+                                        value={transferForm.description}
+                                        onChange={e => setTransferForm({ ...transferForm, description: e.target.value })}
+                                        placeholder="Transferência entre contas"
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex space-x-6 pt-4">
+                                <button type="button" onClick={() => setIsTransferModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Cancelar</button>
+                                <button type="submit" disabled={loading} className="flex-[2] bg-primary text-white py-5 rounded-[20px] font-black shadow-xl shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-1 transition-all flex items-center justify-center gap-2">
+                                    <span className="material-symbols-outlined">sync_alt</span>
+                                    {loading ? 'Transferindo...' : 'Realizar Transferência'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Investment Modal */}
+            {isInvestmentModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h2 className="text-2xl font-black text-gray-800">Movimento de Investimento</h2>
+                                <p className="text-xs text-gray-400 mt-1">Aplicar ou resgatar investimentos</p>
+                            </div>
+                            <button onClick={() => setIsInvestmentModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveInvestmentMovement} className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setInvestmentForm({ ...investmentForm, type: 'application' })}
+                                    className={`py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 ${investmentForm.type === 'application' ? 'bg-purple-500 text-white shadow-lg shadow-purple-200' : 'bg-gray-50 text-gray-400'}`}
+                                >
+                                    <span className="material-symbols-outlined text-sm">trending_up</span>
+                                    APLICAR
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setInvestmentForm({ ...investmentForm, type: 'redemption' })}
+                                    className={`py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 ${investmentForm.type === 'redemption' ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-gray-50 text-gray-400'}`}
+                                >
+                                    <span className="material-symbols-outlined text-sm">trending_down</span>
+                                    RESGATAR
+                                </button>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nome do Investimento</label>
+                                <input
+                                    type="text"
+                                    value={investmentForm.name}
+                                    onChange={e => setInvestmentForm({ ...investmentForm, name: e.target.value })}
+                                    placeholder="Ex: CDB, Tesouro Direto, Poupança..."
+                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                    required
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Conta Bancária</label>
+                                <select
+                                    value={investmentForm.bankAccountId}
+                                    onChange={e => setInvestmentForm({ ...investmentForm, bankAccountId: e.target.value })}
+                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                    required
+                                >
+                                    <option value="">Selecione a conta</option>
+                                    {bankAccounts.map(b => (
+                                        <option key={b.id} value={b.id}>{b.name} - R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Valor (R$)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={investmentForm.amount || ''}
+                                    onChange={e => setInvestmentForm({ ...investmentForm, amount: parseFloat(e.target.value) })}
+                                    placeholder="0,00"
+                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-bold text-lg"
+                                    required
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data</label>
+                                    <input
+                                        type="date"
+                                        value={investmentForm.date}
+                                        onChange={e => setInvestmentForm({ ...investmentForm, date: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Observação</label>
+                                    <input
+                                        type="text"
+                                        value={investmentForm.description}
+                                        onChange={e => setInvestmentForm({ ...investmentForm, description: e.target.value })}
+                                        placeholder="Opcional"
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className={`p-4 rounded-2xl ${investmentForm.type === 'application' ? 'bg-purple-50 border border-purple-100' : 'bg-green-50 border border-green-100'}`}>
+                                <p className={`text-xs font-bold ${investmentForm.type === 'application' ? 'text-purple-600' : 'text-green-600'}`}>
+                                    {investmentForm.type === 'application'
+                                        ? '💰 Aplicação: O valor será debitado da conta selecionada'
+                                        : '💸 Resgate: O valor será creditado na conta selecionada'}
+                                </p>
+                            </div>
+
+                            <div className="flex space-x-6 pt-4">
+                                <button type="button" onClick={() => setIsInvestmentModalOpen(false)} className="flex-1 py-5 font-bold text-gray-400 hover:text-gray-600 transition-colors">Cancelar</button>
+                                <button type="submit" disabled={loading} className={`flex-[2] text-white py-5 rounded-[20px] font-black shadow-xl hover:-translate-y-1 transition-all flex items-center justify-center gap-2 ${investmentForm.type === 'application' ? 'bg-purple-500 shadow-purple-200' : 'bg-green-500 shadow-green-200'}`}>
+                                    <span className="material-symbols-outlined">{investmentForm.type === 'application' ? 'trending_up' : 'trending_down'}</span>
+                                    {loading ? 'Processando...' : investmentForm.type === 'application' ? 'Aplicar' : 'Resgatar'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Bulk Edit Sales Modal */}
             {isBulkEditModalOpen && (
