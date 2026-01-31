@@ -1646,9 +1646,10 @@ const AdminDashboard: React.FC = () => {
             const isApp = investmentForm.type === 'application';
 
             // 1. Criar lançamento financeiro
+            const investmentId = crypto.randomUUID(); // Generate unique ID for this movement
             const { error: errEntry } = await supabase.from('financial_entries').insert([{
                 type: isApp ? 'payable' : 'receivable',
-                description: `Investimento: ${investmentForm.name}${investmentForm.description ? ' - ' + investmentForm.description : ''}`,
+                description: `${isApp ? 'Aplicação' : 'Resgate'}: ${investmentForm.name}${investmentForm.description ? ' - ' + investmentForm.description : ''}`,
                 amount: investmentForm.amount,
                 due_date: investmentForm.date,
                 entry_date: investmentForm.date,
@@ -1658,7 +1659,7 @@ const AdminDashboard: React.FC = () => {
                 bank_account_id: investmentForm.bankAccountId,
                 category: invCategory?.name || 'Investimento',
                 category_id: invCategory?.id,
-                investment_id: investmentForm.name // Usando nome como ID se não houver tabela
+                investment_id: investmentId // UUID for grouping if needed in the future
             }]);
             if (errEntry) throw errEntry;
 
@@ -3747,7 +3748,12 @@ const AdminDashboard: React.FC = () => {
 
                                         // Group by investment name
                                         const investmentsByName = investmentEntries.reduce((acc: any, e) => {
-                                            const name = e.description.replace(/Aplicação: |Resgate: /g, '').trim();
+                                            // Extract name from description: "Aplicação: Name - details" or "Resgate: Name - details" or legacy "Investimento: Name"
+                                            let name = e.description
+                                                .replace(/^(Aplicação|Resgate|Investimento):\s*/i, '')
+                                                .split(' - ')[0]
+                                                .trim();
+                                            if (!name) name = 'Outros';
                                             if (!acc[name]) acc[name] = { applications: 0, redemptions: 0, entries: [] };
                                             if (e.type === 'payable') acc[name].applications += e.amount;
                                             else acc[name].redemptions += e.amount;
@@ -3853,7 +3859,7 @@ const AdminDashboard: React.FC = () => {
                                                                     ) : investmentEntries.sort((a, b) => b.due_date.localeCompare(a.due_date)).map(e => (
                                                                         <tr key={e.id} className="hover:bg-gray-50/30 transition-colors">
                                                                             <td className="px-6 py-4 font-bold text-gray-600">{formatDate(e.due_date)}</td>
-                                                                            <td className="px-6 py-4 font-black text-gray-800">{e.description.replace(/Aplicação: |Resgate: /g, '')}</td>
+                                                                            <td className="px-6 py-4 font-black text-gray-800">{e.description.replace(/^(Aplicação|Resgate|Investimento):\s*/i, '').split(' - ')[0]}</td>
                                                                             <td className="px-6 py-4">
                                                                                 <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${e.type === 'payable' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
                                                                                     {e.type === 'payable' ? 'Aplicação' : 'Resgate'}
