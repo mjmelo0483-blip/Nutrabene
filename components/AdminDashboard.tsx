@@ -1816,10 +1816,12 @@ const AdminDashboard: React.FC = () => {
     async function handleSaveAccount(e: React.FormEvent) {
         e.preventDefault();
         let error;
+        // The balance field in the form represents the INITIAL balance
+        // For new accounts: set both balance and initial_balance to the entered value
+        // For existing accounts: update initial_balance to match balance (they represent the same thing in the form)
         const payload = {
             ...accountForm,
-            // When creating new account, set initial_balance equal to balance
-            initial_balance: accountForm.id ? accountForm.initial_balance : (accountForm.balance || 0)
+            initial_balance: accountForm.balance || 0 // Always sync initial_balance with the form value
         };
         if (accountForm.id) {
             const { id, ...data } = payload;
@@ -1941,43 +1943,56 @@ const AdminDashboard: React.FC = () => {
         }, 0);
 
         // Calculate Initial Balance for the period
-        // Formula: Sum of bank initial balances + ALL entries with due_date before period start
+        // Formula: For each bank, sum initial_balance + entries with due_date after that bank's initial_balance_date but before period start
         // Using ONLY due_date (vencimento) as the criteria
 
-        // 1. Sum of all bank initial balances
-        const sumBankInitialBalances = bankAccounts.reduce((acc, bank) => {
+        let initialBalance = 0;
+
+        bankAccounts.forEach(bank => {
             const bankInitialDate = bank.initial_balance_date || '1900-01-01';
-            // Only include banks that existed before the period
+
+            // Only include banks that existed before the period start
             if (bankInitialDate < periodStartStr) {
-                return acc + (bank.initial_balance || 0);
+                // Add this bank's initial balance
+                initialBalance += (bank.initial_balance || 0);
+
+                // Add entries for THIS bank with due_date AFTER (not on) initial_balance_date and BEFORE period start
+                // These entries happened after the balance snapshot date
+                const bankEntriesAfterInitial = financialEntries.filter(e => {
+                    const dueDate = e.due_date.split('T')[0];
+                    return e.bank_account_id === bank.id &&
+                        dueDate > bankInitialDate && // After the initial balance date
+                        dueDate < periodStartStr &&   // Before the period
+                        e.payment_method !== 'transfer' &&
+                        e.payment_method !== 'investment';
+                });
+
+                bankEntriesAfterInitial.forEach(e => {
+                    if (e.type === 'receivable') {
+                        initialBalance += e.amount;
+                    } else {
+                        initialBalance -= e.amount;
+                    }
+                });
             }
-            return acc;
-        }, 0);
+        });
 
-        // 2. Get the earliest initial_balance_date from all banks
-        const earliestInitialDate = bankAccounts.reduce((earliest, bank) => {
-            const bankInitialDate = bank.initial_balance_date || '1900-01-01';
-            return bankInitialDate < earliest ? bankInitialDate : earliest;
-        }, '9999-12-31');
-
-        // 3. Sum all entries with due_date between earliest initial date and period start
-        const entriesBeforePeriod = financialEntries.filter(e => {
+        // Also add entries without a bank_account_id (if any) that are before the period start
+        const entriesWithoutBank = financialEntries.filter(e => {
             const dueDate = e.due_date.split('T')[0];
-            return dueDate >= earliestInitialDate &&
+            return !e.bank_account_id &&
                 dueDate < periodStartStr &&
                 e.payment_method !== 'transfer' &&
                 e.payment_method !== 'investment';
         });
 
-        const sumEntriesBeforePeriod = entriesBeforePeriod.reduce((acc, e) => {
+        entriesWithoutBank.forEach(e => {
             if (e.type === 'receivable') {
-                return acc + e.amount;
+                initialBalance += e.amount;
             } else {
-                return acc - e.amount;
+                initialBalance -= e.amount;
             }
-        }, 0);
-
-        const initialBalance = sumBankInitialBalances + sumEntriesBeforePeriod;
+        });
 
         return {
             filteredEntries,
