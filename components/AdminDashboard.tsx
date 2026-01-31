@@ -1418,6 +1418,7 @@ const AdminDashboard: React.FC = () => {
                     const saleUpdates: any = {};
                     if (updateData.status) saleUpdates.payment_status = updateData.status;
                     if (updateData.due_date) saleUpdates.due_date = updateData.due_date;
+                    if (updateData.entry_date) saleUpdates.sale_date = updateData.entry_date;
 
                     if (Object.keys(saleUpdates).length > 0) {
                         await supabase.from('sales').update(saleUpdates).eq('id', oldEntry.sale_id);
@@ -1715,7 +1716,7 @@ const AdminDashboard: React.FC = () => {
     const getFilteredFinancialEntries = () => {
         return financialEntries.filter(e => {
             const dateToCompare = financialFilters.dateType === 'entry_date'
-                ? (e.entry_date || '').split('T')[0]
+                ? (e.entry_date || e.created_at || '').split('T')[0]
                 : e.due_date.split('T')[0];
 
             if (financialFilters.startDate && dateToCompare < financialFilters.startDate) return false;
@@ -3296,6 +3297,7 @@ const AdminDashboard: React.FC = () => {
                                                             doc.text('Relatório Financeiro', 14, 15);
                                                             const data = filteredListEntries.map(e => [
                                                                 formatDate(e.due_date),
+                                                                formatDate(e.entry_date || e.created_at),
                                                                 e.description,
                                                                 e.category,
                                                                 bankAccounts.find(b => b.id === e.bank_account_id)?.name || '-',
@@ -3303,7 +3305,7 @@ const AdminDashboard: React.FC = () => {
                                                                 `R$ ${e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                                                             ]);
                                                             autoTable(doc, {
-                                                                head: [['Vencimento', 'Descrição', 'Categoria', 'Conta', 'Status', 'Valor']],
+                                                                head: [['Vencimento', 'Inclusão', 'Descrição', 'Categoria', 'Conta', 'Status', 'Valor']],
                                                                 body: data,
                                                                 startY: 20,
                                                             });
@@ -3315,15 +3317,16 @@ const AdminDashboard: React.FC = () => {
                                                     </button>
                                                     <button
                                                         onClick={() => {
-                                                            const header = "Vencimento;Descrição;Categoria;Conta;Status;Valor\n";
+                                                            const header = "Vencimento;Inclusão;Descrição;Categoria;Conta;Status;Valor\n";
                                                             const rows = filteredListEntries.map(e => {
-                                                                const date = formatDate(e.due_date);
+                                                                const dueDate = formatDate(e.due_date);
+                                                                const entryDate = formatDate(e.entry_date || e.created_at);
                                                                 const desc = e.description.replace(/;/g, ',');
                                                                 const cat = e.category;
                                                                 const bank = bankAccounts.find(b => b.id === e.bank_account_id)?.name || '-';
                                                                 const status = e.status === 'paid' ? 'Pago' : 'Pendente';
                                                                 const value = e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                                                                return `${date};${desc};${cat};${bank};${status};R$ ${value}`;
+                                                                return `${dueDate};${entryDate};${desc};${cat};${bank};${status};R$ ${value}`;
                                                             }).join("\n");
 
                                                             const csvContent = "\uFEFF" + header + rows;
@@ -3508,7 +3511,7 @@ const AdminDashboard: React.FC = () => {
                                                                 />
                                                             </td>
                                                             <td className="px-6 py-4 font-bold text-gray-600">{formatDate(e.due_date)}</td>
-                                                            <td className="px-6 py-4 text-[10px] text-gray-400">{formatDate(e.created_at)}</td>
+                                                            <td className="px-6 py-4 text-[10px] text-gray-400">{formatDate(e.entry_date || e.created_at)}</td>
                                                             <td className="px-6 py-4 font-black text-gray-800">{e.description}</td>
                                                             <td className="px-6 py-4">
                                                                 <span className="text-[10px] font-bold text-gray-400 border px-2 py-0.5 rounded-lg uppercase">{e.category}</span>
