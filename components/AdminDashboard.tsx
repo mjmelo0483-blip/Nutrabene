@@ -1941,37 +1941,43 @@ const AdminDashboard: React.FC = () => {
         }, 0);
 
         // Calculate Initial Balance for the period
-        // Formula: Sum of bank initial balances + entries (by due_date) between initial_balance_date and period start
-        let initialBalance = 0;
+        // Formula: Sum of bank initial balances + ALL entries with due_date before period start
+        // Using ONLY due_date (vencimento) as the criteria
 
-        bankAccounts.forEach(bank => {
+        // 1. Sum of all bank initial balances
+        const sumBankInitialBalances = bankAccounts.reduce((acc, bank) => {
             const bankInitialDate = bank.initial_balance_date || '1900-01-01';
-
             // Only include banks that existed before the period
             if (bankInitialDate < periodStartStr) {
-                // Start with the bank's FIXED initial balance (not current balance)
-                initialBalance += (bank.initial_balance || 0);
-
-                // Add entries that happened between initial_balance_date and period start
-                // These are entries that affect the balance before this period
-                const entriesBetweenDates = financialEntries.filter(e => {
-                    const dueDate = e.due_date.split('T')[0];
-                    return e.bank_account_id === bank.id &&
-                        dueDate >= bankInitialDate &&
-                        dueDate < periodStartStr &&
-                        e.payment_method !== 'transfer' &&
-                        e.payment_method !== 'investment';
-                });
-
-                entriesBetweenDates.forEach(e => {
-                    if (e.type === 'receivable') {
-                        initialBalance += e.amount;
-                    } else {
-                        initialBalance -= e.amount;
-                    }
-                });
+                return acc + (bank.initial_balance || 0);
             }
+            return acc;
+        }, 0);
+
+        // 2. Get the earliest initial_balance_date from all banks
+        const earliestInitialDate = bankAccounts.reduce((earliest, bank) => {
+            const bankInitialDate = bank.initial_balance_date || '1900-01-01';
+            return bankInitialDate < earliest ? bankInitialDate : earliest;
+        }, '9999-12-31');
+
+        // 3. Sum all entries with due_date between earliest initial date and period start
+        const entriesBeforePeriod = financialEntries.filter(e => {
+            const dueDate = e.due_date.split('T')[0];
+            return dueDate >= earliestInitialDate &&
+                dueDate < periodStartStr &&
+                e.payment_method !== 'transfer' &&
+                e.payment_method !== 'investment';
         });
+
+        const sumEntriesBeforePeriod = entriesBeforePeriod.reduce((acc, e) => {
+            if (e.type === 'receivable') {
+                return acc + e.amount;
+            } else {
+                return acc - e.amount;
+            }
+        }, 0);
+
+        const initialBalance = sumBankInitialBalances + sumEntriesBeforePeriod;
 
         return {
             filteredEntries,
