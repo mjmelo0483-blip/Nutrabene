@@ -57,6 +57,7 @@ interface BankAccount {
     id: string;
     name: string;
     balance: number;
+    initial_balance_date?: string;
 }
 
 interface FinancialEntry {
@@ -205,7 +206,7 @@ const AdminDashboard: React.FC = () => {
     });
 
     const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
-    const [accountForm, setAccountForm] = useState<Partial<BankAccount>>({ balance: 0 });
+    const [accountForm, setAccountForm] = useState<Partial<BankAccount>>({ balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') });
 
     const [isCardModalOpen, setIsCardModalOpen] = useState(false);
     const [cardForm, setCardForm] = useState<Partial<CreditCard>>({ limit_amount: 0, current_balance: 0 });
@@ -1827,7 +1828,7 @@ const AdminDashboard: React.FC = () => {
         else {
             showNotification(accountForm.id ? 'Conta atualizada!' : 'Conta criada!');
             setIsAccountModalOpen(false);
-            setAccountForm({ balance: 0 });
+            setAccountForm({ balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') });
             fetchData();
         }
     }
@@ -3920,7 +3921,7 @@ const AdminDashboard: React.FC = () => {
                                 <p className="text-sm text-gray-400">Gerencie seus limites, faturas e cartões.</p>
                             </div>
                             <div className="flex gap-4">
-                                <button onClick={() => { setAccountForm({ balance: 0 }); setIsAccountModalOpen(true); }} className="px-6 py-4 bg-white border border-gray-100 rounded-[24px] font-black text-xs text-gray-500 hover:bg-gray-50 flex items-center shadow-sm transition-all hover:scale-105 active:scale-95">
+                                <button onClick={() => { setAccountForm({ balance: 0, initial_balance_date: new Date().toLocaleDateString('sv-SE') }); setIsAccountModalOpen(true); }} className="px-6 py-4 bg-white border border-gray-100 rounded-[24px] font-black text-xs text-gray-500 hover:bg-gray-50 flex items-center shadow-sm transition-all hover:scale-105 active:scale-95">
                                     <span className="material-symbols-outlined mr-2">account_balance_wallet</span> Gerenciar Bancos
                                 </button>
                                 <button onClick={() => { setCardForm({ limit_amount: 0, current_balance: 0 }); setIsCardModalOpen(true); }} className="px-6 py-4 bg-indigo-600 text-white rounded-[24px] font-black text-xs shadow-xl shadow-indigo-200 flex items-center transition-all hover:scale-105 active:scale-95">
@@ -4782,8 +4783,21 @@ const AdminDashboard: React.FC = () => {
                             <button onClick={() => setIsAccountModalOpen(false)} className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400"><span className="material-symbols-outlined text-sm">close</span></button>
                         </div>
                         <form onSubmit={handleSaveAccount} className="space-y-6">
-                            <input type="text" value={accountForm.name || ''} onChange={e => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome do Banco / Carteira" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
-                            <input type="number" step="0.01" value={accountForm.balance || 0} onChange={e => setAccountForm({ ...accountForm, balance: parseFloat(e.target.value) })} placeholder="Saldo Inicial (R$)" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nome do Banco / Carteira</label>
+                                <input type="text" value={accountForm.name || ''} onChange={e => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Ex: Nubank, Itaú, Caixa..." className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Saldo Inicial (R$)</label>
+                                    <input type="number" step="0.01" value={accountForm.balance || 0} onChange={e => setAccountForm({ ...accountForm, balance: parseFloat(e.target.value) })} placeholder="0,00" className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" required />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Data do Saldo</label>
+                                    <input type="date" value={accountForm.initial_balance_date || ''} onChange={e => setAccountForm({ ...accountForm, initial_balance_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:ring-4 ring-primary/10 outline-none" />
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-gray-400 px-4 italic">* A data do saldo inicial é usada para calcular o fluxo de caixa histórico.</p>
                             <button type="submit" className="w-full bg-primary text-white py-5 rounded-[20px] font-black shadow-xl">Salvar Conta</button>
                         </form>
                     </div>
