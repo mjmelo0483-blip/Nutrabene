@@ -258,7 +258,8 @@ const AdminDashboard: React.FC = () => {
         type: 'application' as 'application' | 'redemption',
         amount: 0,
         date: new Date().toLocaleDateString('sv-SE'),
-        description: ''
+        description: '',
+        isInitial: false
     });
 
     const [financeViewMode, setFinanceViewMode] = useState<'dashboard' | 'list' | 'investments'>('dashboard');
@@ -1629,9 +1630,23 @@ const AdminDashboard: React.FC = () => {
         }
     }
 
+    function closeInvestmentModal() {
+        setIsInvestmentModalOpen(false);
+        setInvestmentForm({
+            name: '',
+            bankAccountId: '',
+            type: 'application',
+            amount: 0,
+            date: new Date().toLocaleDateString('sv-SE'),
+            description: '',
+            isInitial: false
+        });
+    }
+
     async function handleSaveInvestmentMovement(e: React.FormEvent) {
         e.preventDefault();
-        if (!investmentForm.bankAccountId || !investmentForm.name || investmentForm.amount <= 0) {
+        // If not initial, bank account is required
+        if ((!investmentForm.isInitial && !investmentForm.bankAccountId) || !investmentForm.name || investmentForm.amount <= 0) {
             showNotification('Preencha os campos obrigatórios!', 'error');
             return;
         }
@@ -1639,37 +1654,44 @@ const AdminDashboard: React.FC = () => {
         setLoading(true);
         try {
             const bank = bankAccounts.find(b => b.id === investmentForm.bankAccountId);
-            if (!bank) throw new Error('Conta bancária não encontrada');
+
+            // If NOT initial investment, bank must exist
+            if (!investmentForm.isInitial && !bank) {
+                throw new Error('Conta bancária não encontrada');
+            }
 
             const invCategory = categories.find(c => c.name === 'Investimento') ||
                 categories.find(c => c.name.toLowerCase().includes('invest'));
 
             const isApp = investmentForm.type === 'application';
+            const isInitial = investmentForm.isInitial;
 
             // 1. Criar lançamento financeiro
-            const investmentId = crypto.randomUUID(); // Generate unique ID for this movement
+            const investmentId = crypto.randomUUID();
             const { error: errEntry } = await supabase.from('financial_entries').insert([{
                 type: isApp ? 'payable' : 'receivable',
-                description: `${isApp ? 'Aplicação' : 'Resgate'}: ${investmentForm.name}${investmentForm.description ? ' - ' + investmentForm.description : ''}`,
+                description: `${isInitial ? 'Investimento Inicial' : (isApp ? 'Aplicação' : 'Resgate')}: ${investmentForm.name}${investmentForm.description ? ' - ' + investmentForm.description : ''}`,
                 amount: investmentForm.amount,
                 due_date: investmentForm.date,
                 entry_date: investmentForm.date,
                 payment_date: investmentForm.date,
                 status: 'paid',
                 payment_method: 'investment',
-                bank_account_id: investmentForm.bankAccountId,
+                bank_account_id: isInitial ? null : investmentForm.bankAccountId,
                 category: invCategory?.name || 'Investimento',
                 category_id: invCategory?.id,
-                investment_id: investmentId // UUID for grouping if needed in the future
+                investment_id: investmentId
             }]);
             if (errEntry) throw errEntry;
 
-            // 2. Atualizar saldo do banco
-            const newBankBalance = isApp ? bank.balance - investmentForm.amount : bank.balance + investmentForm.amount;
-            await supabase.from('bank_accounts').update({ balance: newBankBalance }).eq('id', bank.id);
+            // 2. Atualizar saldo do banco (Apenas se NÃO for investimento inicial)
+            if (!isInitial && bank) {
+                const newBankBalance = isApp ? bank.balance - investmentForm.amount : bank.balance + investmentForm.amount;
+                await supabase.from('bank_accounts').update({ balance: newBankBalance }).eq('id', bank.id);
+            }
 
-            showNotification(isApp ? 'Aplicação realizada!' : 'Resgate realizado!');
-            setIsInvestmentModalOpen(false);
+            showNotification(isInitial ? 'Investimento inicial registrado!' : (isApp ? 'Aplicação realizada!' : 'Resgate realizado!'));
+            closeInvestmentModal();
             fetchData();
         } catch (err: any) {
             showNotification(`Erro no investimento: ${err.message}`, 'error');
@@ -3784,7 +3806,7 @@ const AdminDashboard: React.FC = () => {
                                         const investmentsByName = investmentEntries.reduce((acc: any, e) => {
                                             // Extract name from description: "Aplicação: Name - details" or "Resgate: Name - details" or legacy "Investimento: Name"
                                             let name = e.description
-                                                .replace(/^(Aplicação|Resgate|Investimento):\s*/i, '')
+                                                .replace(/^(Aplicação|Resgate|Investimento|Investimento Inicial):\s*/i, '')
                                                 .split(' - ')[0]
                                                 .trim();
                                             if (!name) name = 'Outros';
@@ -3893,10 +3915,13 @@ const AdminDashboard: React.FC = () => {
                                                                     ) : investmentEntries.sort((a, b) => b.due_date.localeCompare(a.due_date)).map(e => (
                                                                         <tr key={e.id} className="hover:bg-gray-50/30 transition-colors">
                                                                             <td className="px-6 py-4 font-bold text-gray-600">{formatDate(e.due_date)}</td>
-                                                                            <td className="px-6 py-4 font-black text-gray-800">{e.description.replace(/^(Aplicação|Resgate|Investimento):\s*/i, '').split(' - ')[0]}</td>
+                                                                            <td className="px-6 py-4 font-black text-gray-800">{e.description.replace(/^(Aplicação|Resgate|Investimento|Investimento Inicial):\s*/i, '').split(' - ')[0]}</td>
                                                                             <td className="px-6 py-4">
-                                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${e.type === 'payable' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
-                                                                                    {e.type === 'payable' ? 'Aplicação' : 'Resgate'}
+                                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${e.description.startsWith('Investimento Inicial') ? 'bg-amber-100 text-amber-600' :
+                                                                                    e.type === 'payable' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'
+                                                                                    }`}>
+                                                                                    {e.description.startsWith('Investimento Inicial') ? 'Saldo Inicial' :
+                                                                                        e.type === 'payable' ? 'Aplicação' : 'Resgate'}
                                                                                 </span>
                                                                             </td>
                                                                             <td className="px-6 py-4 text-gray-500 font-medium">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || '-'}</td>
@@ -5586,7 +5611,7 @@ const AdminDashboard: React.FC = () => {
                                 <h2 className="text-2xl font-black text-gray-800">Movimento de Investimento</h2>
                                 <p className="text-xs text-gray-400 mt-1">Aplicar ou resgatar investimentos</p>
                             </div>
-                            <button onClick={() => setIsInvestmentModalOpen(false)} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+                            <button onClick={closeInvestmentModal} className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
                                 <span className="material-symbols-outlined">close</span>
                             </button>
                         </div>
@@ -5594,21 +5619,30 @@ const AdminDashboard: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => setInvestmentForm({ ...investmentForm, type: 'application' })}
-                                    className={`py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 ${investmentForm.type === 'application' ? 'bg-purple-500 text-white shadow-lg shadow-purple-200' : 'bg-gray-50 text-gray-400'}`}
+                                    onClick={() => setInvestmentForm({ ...investmentForm, type: 'application', isInitial: false })}
+                                    className={`py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 ${investmentForm.type === 'application' && !investmentForm.isInitial ? 'bg-purple-500 text-white shadow-lg shadow-purple-200' : 'bg-gray-50 text-gray-400'}`}
                                 >
                                     <span className="material-symbols-outlined text-sm">trending_up</span>
                                     APLICAR
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setInvestmentForm({ ...investmentForm, type: 'redemption' })}
+                                    onClick={() => setInvestmentForm({ ...investmentForm, type: 'redemption', isInitial: false })}
                                     className={`py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 ${investmentForm.type === 'redemption' ? 'bg-green-500 text-white shadow-lg shadow-green-200' : 'bg-gray-50 text-gray-400'}`}
                                 >
                                     <span className="material-symbols-outlined text-sm">trending_down</span>
                                     RESGATAR
                                 </button>
                             </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setInvestmentForm({ ...investmentForm, type: 'application', isInitial: !investmentForm.isInitial })}
+                                className={`w-full py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 border-2 ${investmentForm.isInitial ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'}`}
+                            >
+                                <span className="material-symbols-outlined text-sm">stars</span>
+                                INVESTIMENTO INICIAL (SALDO)
+                            </button>
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nome do Investimento</label>
@@ -5622,20 +5656,28 @@ const AdminDashboard: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Conta Bancária</label>
-                                <select
-                                    value={investmentForm.bankAccountId}
-                                    onChange={e => setInvestmentForm({ ...investmentForm, bankAccountId: e.target.value })}
-                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
-                                    required
-                                >
-                                    <option value="">Selecione a conta</option>
-                                    {bankAccounts.map(b => (
-                                        <option key={b.id} value={b.id}>{b.name} - R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {!investmentForm.isInitial && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Conta Bancária</label>
+                                    <select
+                                        value={investmentForm.bankAccountId}
+                                        onChange={e => setInvestmentForm({ ...investmentForm, bankAccountId: e.target.value })}
+                                        className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                        required
+                                    >
+                                        <option value="">Selecione a conta</option>
+                                        {bankAccounts.map(b => (
+                                            <option key={b.id} value={b.id}>{b.name} - R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {investmentForm.isInitial && (
+                                <p className="text-[10px] text-amber-600 bg-amber-50 p-4 rounded-2xl font-medium border border-amber-100 italic">
+                                    * Investimento inicial não altera o saldo das contas bancárias. Use para registrar posições existentes.
+                                </p>
+                            )}
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Valor (R$)</label>
