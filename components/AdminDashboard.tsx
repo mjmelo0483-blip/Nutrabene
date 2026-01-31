@@ -91,10 +91,22 @@ interface Sale {
     total_price: number; // Gross total
     discount_percentage: number;
     discount_amount: number;
-    net_amount: number; // Final amount to receive
+    net_amount: number; // Amount after discount, before card fee
     sale_date: string;
     due_date?: string;
     payment_status: string;
+    payment_method?: string;
+    installments?: number;
+    card_brand?: string;
+    card_fee_percent?: number;
+    card_fee_amount?: number;
+}
+
+interface PaymentFee {
+    id: string;
+    brand: string;
+    method: 'debit' | 'credit_cash' | 'credit_installments';
+    fee_percentage: number;
 }
 
 interface FinancialCategory {
@@ -142,6 +154,7 @@ const AdminDashboard: React.FC = () => {
     const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
     const [categories, setCategories] = useState<FinancialCategory[]>([]);
     const [movements, setMovements] = useState<InventoryMovement[]>([]);
+    const [paymentFees, setPaymentFees] = useState<PaymentFee[]>([]);
 
     const [uploading, setUploading] = useState(false);
     const [dataError, setDataError] = useState('');
@@ -167,6 +180,11 @@ const AdminDashboard: React.FC = () => {
         discount_amount: 0,
         total_price: 0,
         net_amount: 0,
+        payment_method: 'pix',
+        installments: 1,
+        card_brand: '',
+        card_fee_percent: 0,
+        card_fee_amount: 0,
         sale_date: new Date().toLocaleDateString('sv-SE'),
         due_date: new Date().toLocaleDateString('sv-SE'),
         payment_status: 'pending'
@@ -348,14 +366,28 @@ const AdminDashboard: React.FC = () => {
                 return feeCategories.includes(cat?.name || '');
             });
 
-        const fees = feeEntriesRaw.reduce((acc, e) => acc + e.amount, 0);
-        const feeDetails = feeEntriesRaw.map(e => ({
+        const manualFees = feeEntriesRaw.reduce((acc, e) => acc + e.amount, 0);
+        const cardFeesTotal = periodSales.reduce((acc, s) => acc + (s.card_fee_amount || 0), 0);
+        const fees = manualFees + cardFeesTotal;
+
+        const manualFeeDetails = feeEntriesRaw.map(e => ({
             id: e.id,
             date: e.due_date,
             description: e.description,
             amount: e.amount,
             category: categories.find(c => c.id === (e as any).category_id)?.name
         }));
+
+        const cardFeeDetails = periodSales
+            .filter(s => (s.card_fee_amount || 0) > 0)
+            .map(s => ({
+                id: `card-fee-${s.id}`,
+                date: s.sale_date,
+                description: `Taxa Cartão: Venda #${s.id.slice(0, 8)} (${s.card_brand})`,
+                amount: s.card_fee_amount || 0
+            }));
+
+        const feeDetails = [...manualFeeDetails, ...cardFeeDetails];
 
         // Commission details from sales
         const commissions = periodSales.reduce((acc, s) => acc + (s.discount_amount || 0), 0);
@@ -498,6 +530,65 @@ const AdminDashboard: React.FC = () => {
         setLoading(false);
     }
 
+    // --- Automatic Sale Calculations ---
+    useEffect(() => {
+        if (!isSaleModalOpen) return;
+
+        const product = products.find(p => p.id === saleForm.product_id);
+        const unitPrice = saleForm.unit_price || product?.price || 0;
+        const gross = unitPrice * (saleForm.quantity || 1);
+
+        const discPerc = saleForm.discount_percentage || 0;
+        const discAmt = gross * (discPerc / 100);
+        const amountAfterDiscount = gross - discAmt;
+
+        let feePercent = 0;
+        if (saleForm.payment_method?.includes('cartão')) {
+            let methodKey: 'debit' | 'credit_cash' | 'credit_installments' = 'credit_cash';
+            if (saleForm.payment_method === 'cartão_débito') {
+                methodKey = 'debit';
+            } else if ((saleForm.installments || 1) > 1) {
+                methodKey = 'credit_installments';
+            }
+
+            const fee = paymentFees.find(f => f.brand === saleForm.card_brand && f.method === methodKey);
+            feePercent = fee?.fee_percentage || 0;
+        }
+
+        const feeAmt = amountAfterDiscount * (feePercent / 100);
+        const finalNet = amountAfterDiscount - feeAmt;
+
+        // Check if values actually changed to avoid infinite loop
+        if (
+            saleForm.total_price !== gross ||
+            saleForm.discount_amount !== discAmt ||
+            saleForm.card_fee_percent !== feePercent ||
+            saleForm.card_fee_amount !== feeAmt ||
+            saleForm.net_amount !== finalNet ||
+            saleForm.unit_price !== unitPrice
+        ) {
+            setSaleForm(prev => ({
+                ...prev,
+                unit_price: unitPrice,
+                total_price: gross,
+                discount_amount: discAmt,
+                card_fee_percent: feePercent,
+                card_fee_amount: feeAmt,
+                net_amount: finalNet
+            }));
+        }
+    }, [
+        saleForm.product_id,
+        saleForm.quantity,
+        saleForm.discount_percentage,
+        saleForm.payment_method,
+        saleForm.card_brand,
+        saleForm.installments,
+        isSaleModalOpen,
+        products,
+        paymentFees
+    ]);
+
     async function handleLogin(e: React.FormEvent) {
         e.preventDefault();
         setAuthError('');
@@ -522,7 +613,8 @@ const AdminDashboard: React.FC = () => {
                 { data: sls },
                 { data: cards },
                 { data: cats },
-                { data: data_movements }
+                { data: data_movements },
+                { data: fees }
             ] = await Promise.all([
                 supabase.from('registrations').select('*').order('created_at', { ascending: false }),
                 supabase.from('reminder_settings').select('message_template, media_url').eq('key', 'default').single(),
@@ -533,7 +625,8 @@ const AdminDashboard: React.FC = () => {
                 supabase.from('sales').select('*').order('sale_date', { ascending: false }),
                 supabase.from('credit_cards').select('*').order('name'),
                 supabase.from('financial_categories').select('*').order('name'),
-                supabase.from('inventory_movements').select('*').order('movement_date', { ascending: false })
+                supabase.from('inventory_movements').select('*').order('movement_date', { ascending: false }),
+                supabase.from('card_fees').select('*').order('brand')
             ]);
 
             if (regs) setRegistrations(regs);
@@ -546,6 +639,7 @@ const AdminDashboard: React.FC = () => {
             if (cards) setCreditCards(cards);
             if (cats) setCategories(cats);
             if (data_movements) setMovements(data_movements);
+            if (fees) setPaymentFees(fees);
         } catch (err) {
             console.error(err);
             setDataError('Erro ao sincronizar dados com o servidor.');
@@ -578,6 +672,16 @@ const AdminDashboard: React.FC = () => {
             setIsModalOpen(false);
             setEditingClient(null);
             fetchData();
+        }
+    }
+
+    async function handleUpdateFee(id: string, newPercentage: number) {
+        const { error } = await supabase.from('card_fees').update({ fee_percentage: newPercentage }).eq('id', id);
+        if (error) showNotification(error.message, 'error');
+        else {
+            setPaymentFees(prev => prev.map(f => f.id === id ? { ...f, fee_percentage: newPercentage } : f));
+            // Sincronização via fetchData opcional se o estado local for atualizado corretamente
+            // fetchData(); 
         }
     }
 
@@ -802,7 +906,7 @@ const AdminDashboard: React.FC = () => {
     // --- Sale Handlers ---
     async function handleRegisterSale(e: React.FormEvent) {
         e.preventDefault();
-        if (!saleForm.product_id || !saleForm.quantity || !saleForm.total_price || !saleForm.net_amount) {
+        if (!saleForm.product_id || !saleForm.quantity || !saleForm.total_price) {
             showNotification('Preencha os campos obrigatórios!', 'error');
             return;
         }
@@ -844,8 +948,25 @@ const AdminDashboard: React.FC = () => {
                     await supabase.from('products').update(updatePayload).eq('id', product.id);
                 }
 
-                // Update the sale
-                const { error: updError } = await supabase.from('sales').update(saleForm).eq('id', saleForm.id);
+                const { error: updError } = await supabase.from('sales').update({
+                    product_id: saleForm.product_id,
+                    reseller_id: saleForm.reseller_id,
+                    client_id: saleForm.client_id,
+                    quantity: saleForm.quantity,
+                    unit_price: saleForm.unit_price,
+                    total_price: saleForm.total_price,
+                    discount_percentage: saleForm.discount_percentage,
+                    discount_amount: saleForm.discount_amount,
+                    net_amount: saleForm.net_amount,
+                    sale_date: saleForm.sale_date,
+                    due_date: saleForm.due_date,
+                    payment_status: saleForm.payment_status,
+                    payment_method: saleForm.payment_method,
+                    installments: saleForm.installments,
+                    card_brand: saleForm.card_brand,
+                    card_fee_percent: saleForm.card_fee_percent,
+                    card_fee_amount: saleForm.card_fee_amount
+                }).eq('id', saleForm.id);
                 if (updError) { showNotification(updError.message, 'error'); return; }
 
                 // Update the corresponding financial entry
@@ -882,7 +1003,25 @@ const AdminDashboard: React.FC = () => {
                 return;
             }
 
-            const { data: sale, error: slsError } = await supabase.from('sales').insert([saleForm]).select().single();
+            const { data: sale, error: slsError } = await supabase.from('sales').insert([{
+                product_id: saleForm.product_id,
+                reseller_id: saleForm.reseller_id,
+                client_id: saleForm.client_id,
+                quantity: saleForm.quantity,
+                unit_price: saleForm.unit_price,
+                total_price: saleForm.total_price,
+                discount_percentage: saleForm.discount_percentage,
+                discount_amount: saleForm.discount_amount,
+                net_amount: saleForm.net_amount,
+                sale_date: saleForm.sale_date,
+                due_date: saleForm.due_date,
+                payment_status: saleForm.payment_status,
+                payment_method: saleForm.payment_method,
+                installments: saleForm.installments,
+                card_brand: saleForm.card_brand,
+                card_fee_percent: saleForm.card_fee_percent,
+                card_fee_amount: saleForm.card_fee_amount
+            }]).select().single();
             if (slsError) { showNotification(`Erro na venda: ${slsError.message}`, 'error'); return; }
 
             // Registrar saída no estoque (FIFO)
@@ -3996,6 +4135,47 @@ const AdminDashboard: React.FC = () => {
                             <hr className="border-gray-100" />
 
                             <section>
+                                <h3 className="text-2xl font-black text-gray-800 mb-2">Taxas de Cartão</h3>
+                                <p className="text-sm text-gray-400 mb-8">Gerencie as taxas descontadas pelas operadoras de cartão.</p>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                            <tr>
+                                                <th className="px-6 py-4 rounded-l-2xl">Bandeira</th>
+                                                <th className="px-6 py-4 italic">Débito (%)</th>
+                                                <th className="px-6 py-4 italic">Crédito à Vista (%)</th>
+                                                <th className="px-6 py-4 italic rounded-r-2xl">Parcelado (%)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {['Mastercard', 'Visa', 'Elo'].map(brand => (
+                                                <tr key={brand} className="hover:bg-gray-50/50 transition-colors">
+                                                    <td className="px-6 py-5 font-black text-gray-700">{brand}</td>
+                                                    {['debit', 'credit_cash', 'credit_installments'].map(method => {
+                                                        const fee = paymentFees.find(f => f.brand === brand && f.method === method);
+                                                        return (
+                                                            <td key={method} className="px-6 py-5">
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    value={fee?.fee_percentage || 0}
+                                                                    onChange={e => handleUpdateFee(fee?.id!, parseFloat(e.target.value))}
+                                                                    className="w-24 p-2 bg-gray-50 border-none rounded-xl focus:bg-white focus:ring-4 ring-primary/10 transition-all font-bold text-gray-700"
+                                                                />
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+
+                            <hr className="border-gray-100" />
+
+                            <section>
                                 <h3 className="text-2xl font-black text-gray-800 mb-2">Mídia do Lembrete</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                                     <div className="relative group rounded-[40px] overflow-hidden border-4 border-gray-50 shadow-xl aspect-square bg-gray-50 flex items-center justify-center">
@@ -4789,35 +4969,90 @@ const AdminDashboard: React.FC = () => {
                                                 type="number"
                                                 step="0.1"
                                                 value={saleForm.discount_percentage || 0}
-                                                onChange={e => {
-                                                    const discPerc = parseFloat(e.target.value) || 0;
-                                                    const gross = saleForm.total_price || 0;
-                                                    const discAmt = gross * (discPerc / 100);
-                                                    setSaleForm({
-                                                        ...saleForm,
-                                                        discount_percentage: discPerc,
-                                                        discount_amount: discAmt,
-                                                        net_amount: gross - discAmt
-                                                    });
-                                                }}
+                                                onChange={e => setSaleForm({ ...saleForm, discount_percentage: parseFloat(e.target.value) || 0 })}
                                                 className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-bold text-red-500"
                                             />
                                         </div>
                                     </div>
                                 </div>
 
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Forma de Pagamento</label>
+                                        <select
+                                            value={saleForm.payment_method || ''}
+                                            onChange={e => setSaleForm({ ...saleForm, payment_method: e.target.value, installments: 1 })}
+                                            className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                            required
+                                        >
+                                            <option value="pix">📱 Pix</option>
+                                            <option value="dinheiro">💵 Dinheiro</option>
+                                            <option value="cartão_crédito">💳 Cartão de Crédito</option>
+                                            <option value="cartão_débito">💳 Cartão de Débito</option>
+                                            <option value="prazo">⏳ A Prazo / Fiado</option>
+                                        </select>
+                                    </div>
+
+                                    {saleForm.payment_method?.includes('cartão') && (
+                                        <>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Bandeira</label>
+                                                <select
+                                                    value={saleForm.card_brand || ''}
+                                                    onChange={e => setSaleForm({ ...saleForm, card_brand: e.target.value })}
+                                                    className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                                    required
+                                                >
+                                                    <option value="">Selecione</option>
+                                                    <option value="Mastercard">Mastercard</option>
+                                                    <option value="Visa">Visa</option>
+                                                    <option value="Elo">Elo</option>
+                                                    <option value="Outros">Outros</option>
+                                                </select>
+                                            </div>
+                                            {saleForm.payment_method === 'cartão_crédito' && (
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Parcelas</label>
+                                                    <select
+                                                        value={saleForm.installments || 1}
+                                                        onChange={e => setSaleForm({ ...saleForm, installments: parseInt(e.target.value) })}
+                                                        className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                                    >
+                                                        {[...Array(12)].map((_, i) => (
+                                                            <option key={i + 1} value={i + 1}>{i + 1}x</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+
                                 <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10 space-y-4">
-                                    <div className="flex justify-between items-center">
+                                    <div className="flex justify-between items-center text-sm">
                                         <span className="text-gray-500 font-bold">Total Bruto:</span>
                                         <span className="font-black text-gray-800">R$ {saleForm.total_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
-                                    <div className="flex justify-between items-center text-red-500">
-                                        <span className="font-bold">{saleForm.reseller_id ? 'Comissão' : 'Desconto'} ({saleForm.discount_percentage}%):</span>
-                                        <span className="font-black">- R$ {saleForm.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                    </div>
+                                    {saleForm.discount_amount! > 0 && (
+                                        <div className="flex justify-between items-center text-red-500 text-sm">
+                                            <span className="font-bold">{saleForm.reseller_id ? 'Comissão' : 'Desconto'} ({saleForm.discount_percentage}%):</span>
+                                            <span className="font-black">- R$ {saleForm.discount_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                    )}
+                                    {saleForm.card_fee_amount! > 0 && (
+                                        <div className="flex justify-between items-center text-amber-600 text-sm">
+                                            <span className="font-bold">Taxa Cartão ({saleForm.card_fee_percent}%):</span>
+                                            <span className="font-black">- R$ {saleForm.card_fee_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between items-center pt-4 border-t border-primary/20">
-                                        <span className="text-primary font-black text-xl">Líquido a Receber:</span>
-                                        <span className="text-primary font-black text-2xl">R$ {saleForm.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        <span className="text-primary font-black text-xl">Líquido Final:</span>
+                                        <div className="text-right">
+                                            <span className="text-primary font-black text-2xl block">R$ {saleForm.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            {saleForm.installments! > 1 && (
+                                                <span className="text-[10px] text-primary/60 font-black uppercase tracking-widest">{saleForm.installments}x de R$ {((saleForm.total_price || 0) / saleForm.installments!).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
