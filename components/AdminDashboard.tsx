@@ -2152,14 +2152,12 @@ const AdminDashboard: React.FC = () => {
             return acc + (e.type === 'receivable' ? e.amount : -e.amount);
         }, 0);
 
-        const totalNetInvestmentsBankImpact = investmentEntries.reduce((acc, e) => {
+        // Investment Metric (Visual impact on Cash Flow)
+        const totalInvestments = investmentEntries.reduce((acc, e) => {
             return acc + (e.type === 'receivable' ? e.amount : -e.amount);
         }, 0);
 
-        // Investment Net Change (for the Investment Card)
-        const totalInvestments = investmentEntries.reduce((acc, e) => {
-            return acc + (e.type === 'payable' ? e.amount : -e.amount);
-        }, 0);
+        const totalNetInvestmentsBankImpact = totalInvestments;
 
         const transferGroup = transferEntries.length > 0 ? {
             id: 'transfers-group',
@@ -3485,7 +3483,10 @@ const AdminDashboard: React.FC = () => {
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimentos</p>
                                                 <span className="material-symbols-outlined text-purple-100 group-hover:text-purple-400 transition-colors">payments</span>
                                             </div>
-                                            <p className="text-xl font-black text-gray-800">R$ {totalInvestments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                            <p className="text-xl font-black text-gray-800">
+                                                {totalInvestments < 0 ? '- ' : (totalInvestments > 0 ? '+ ' : '')}
+                                                R$ {Math.abs(totalInvestments).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
                                         </div>
                                         <div className="bg-primary p-6 rounded-[32px] shadow-xl shadow-primary/20 group hover:scale-[1.02] transition-all">
                                             <div className="flex justify-between items-center mb-4">
