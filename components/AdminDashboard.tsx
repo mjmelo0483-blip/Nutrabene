@@ -241,6 +241,7 @@ const AdminDashboard: React.FC = () => {
     const [cashFlowMode, setCashFlowMode] = useState<'daily' | 'monthly'>('daily');
     const [cfBaseDate, setCfBaseDate] = useState<Date>(new Date());
     const [expandedCFGroups, setExpandedCFGroups] = useState<Set<string>>(new Set());
+    const [cfSelectedAccountId, setCfSelectedAccountId] = useState<string>('');
 
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [transferForm, setTransferForm] = useState({
@@ -2083,11 +2084,13 @@ const AdminDashboard: React.FC = () => {
         // Filter entries for the current period
         const filteredEntries = financialEntries.filter(e => {
             const entryDateStr = e.due_date.split('T')[0];
-            if (cashFlowMode === 'daily') {
-                return entryDateStr === baseDateStr;
-            } else {
-                return entryDateStr.startsWith(`${baseYear}-${baseMonth}`);
-            }
+            const isInPeriod = cashFlowMode === 'daily'
+                ? entryDateStr === baseDateStr
+                : entryDateStr.startsWith(`${baseYear}-${baseMonth}`);
+
+            const matchesAccount = !cfSelectedAccountId || e.bank_account_id === cfSelectedAccountId;
+
+            return isInPeriod && matchesAccount;
         });
 
         // Filter out transfers and investments for regular cash flow totals
@@ -2131,7 +2134,11 @@ const AdminDashboard: React.FC = () => {
 
         let initialBalance = 0;
 
-        bankAccounts.forEach(bank => {
+        const filteredBanks = cfSelectedAccountId
+            ? bankAccounts.filter(b => b.id === cfSelectedAccountId)
+            : bankAccounts;
+
+        filteredBanks.forEach(bank => {
             const bankInitialDate = bank.initial_balance_date || '1900-01-01';
 
             // Only include banks that existed before the period start
@@ -3428,9 +3435,13 @@ const AdminDashboard: React.FC = () => {
                                     {/* Actions Bar */}
                                     <div className="flex flex-wrap gap-4">
                                         <div className="relative group">
-                                            <select className="bg-white border rounded-2xl px-6 py-4 text-xs font-black text-gray-500 shadow-sm appearance-none pr-12 cursor-pointer focus:ring-4 ring-primary/5 transition-all">
-                                                <option>Todas as Contas</option>
-                                                {bankAccounts.map(b => <option key={b.id}>{b.name}</option>)}
+                                            <select
+                                                value={cfSelectedAccountId}
+                                                onChange={(e) => setCfSelectedAccountId(e.target.value)}
+                                                className="bg-white border rounded-2xl px-6 py-4 text-xs font-black text-gray-500 shadow-sm appearance-none pr-12 cursor-pointer focus:ring-4 ring-primary/5 transition-all outline-none"
+                                            >
+                                                <option value="">Todas as Contas</option>
+                                                {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                             </select>
                                             <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none">expand_more</span>
                                         </div>
