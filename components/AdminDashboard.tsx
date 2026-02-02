@@ -320,6 +320,28 @@ const AdminDashboard: React.FC = () => {
     const [hoveredProduct, setHoveredProduct] = useState<any>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [expandedDreRow, setExpandedDreRow] = useState<string | null>(null);
+    const investmentsSummary = useMemo(() => {
+        const summary: Record<string, number> = {};
+        financialEntries
+            .filter(e => e.payment_method === 'investment')
+            .forEach(e => {
+                const name = e.description
+                    .replace(/^(Investimento Inicial|Aplicação|Resgate|Investimento):\s*/i, '')
+                    .split(' - ')[0]
+                    .trim() || 'Outros';
+
+                if (name === 'Investimento Inicial') return;
+
+                if (!summary[name]) summary[name] = 0;
+                if (e.type === 'payable') summary[name] += e.amount;
+                else summary[name] -= e.amount;
+            });
+        return summary;
+    }, [financialEntries]);
+
+    const uniqueInvestmentNames = useMemo(() =>
+        Object.keys(investmentsSummary).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+        [investmentsSummary]);
 
     const dreData = useMemo(() => {
         const periodSales = sales.filter(s => {
@@ -5833,15 +5855,44 @@ const AdminDashboard: React.FC = () => {
                             </button>
 
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Nome do Investimento</label>
-                                <input
-                                    type="text"
-                                    value={investmentForm.name}
-                                    onChange={e => setInvestmentForm({ ...investmentForm, name: e.target.value })}
-                                    placeholder="Ex: CDB, Tesouro Direto, Poupança..."
-                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
-                                    required
-                                />
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 font-bold">Nome do Investimento</label>
+                                {investmentForm.type === 'redemption' && uniqueInvestmentNames.length > 0 ? (
+                                    <div className="relative group">
+                                        <select
+                                            value={investmentForm.name}
+                                            onChange={e => setInvestmentForm({ ...investmentForm, name: e.target.value })}
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer font-bold text-gray-800"
+                                            required
+                                        >
+                                            <option value="">Selecione para Resgate</option>
+                                            {uniqueInvestmentNames.map(name => (
+                                                <option key={name} value={name}>
+                                                    {name} (Saldo: R$ {investmentsSummary[name].toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none group-focus-within:text-primary transition-colors">expand_more</span>
+                                    </div>
+                                ) : (
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            list="inv-names-list"
+                                            value={investmentForm.name}
+                                            onChange={e => setInvestmentForm({ ...investmentForm, name: e.target.value })}
+                                            placeholder="Ex: CDB, Tesouro Direto, Poupança..."
+                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-bold text-gray-800"
+                                            required
+                                        />
+                                        <datalist id="inv-names-list">
+                                            {uniqueInvestmentNames.map(name => (
+                                                <option key={name} value={name}>
+                                                    Saldo: R$ {investmentsSummary[name].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </option>
+                                            ))}
+                                        </datalist>
+                                    </div>
+                                )}
                             </div>
 
                             {!investmentForm.isInitial && (
