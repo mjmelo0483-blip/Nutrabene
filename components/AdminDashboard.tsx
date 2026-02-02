@@ -2766,12 +2766,12 @@ const AdminDashboard: React.FC = () => {
                                 <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10 flex flex-col justify-center items-center text-center">
                                     <p className="text-sm font-bold text-primary/60 uppercase tracking-widest mb-2">Disponível em Bancos</p>
                                     <p className="text-4xl font-black text-primary whitespace-nowrap">
-                                        R$ {bankAccounts.reduce((acc, b) => acc + b.balance, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        R$ {(Object.values(bankAccountBalances) as number[]).reduce((acc, bal) => acc + bal, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </p>
                                     <div className="mt-6 flex flex-wrap justify-center gap-2">
                                         {bankAccounts.map(b => (
                                             <div key={b.id} className="bg-white px-3 py-1 rounded-full text-[10px] font-bold text-gray-500 border whitespace-nowrap">
-                                                {b.name}: R$ {b.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                {b.name}: R$ {(bankAccountBalances[b.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </div>
                                         ))}
                                     </div>
