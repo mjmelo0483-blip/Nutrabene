@@ -1571,7 +1571,16 @@ const AdminDashboard: React.FC = () => {
             }
 
             showNotification(entryData.id ? 'Lançamento atualizado!' : 'Lançamento(s) gravado(s) com sucesso!');
-            setIsFinancialModalOpen(false);
+            if (entryData.id) {
+                setIsFinancialModalOpen(false);
+            } else {
+                setFinancialForm(prev => ({
+                    ...prev,
+                    amount: undefined as any,
+                    category_id: '',
+                    category: ''
+                }));
+            }
             fetchData();
         } catch (error: any) {
             showNotification(`Erro: ${error.message}`, 'error');
