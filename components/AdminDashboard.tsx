@@ -343,6 +343,28 @@ const AdminDashboard: React.FC = () => {
         Object.keys(investmentsSummary).sort((a, b) => a.localeCompare(b, 'pt-BR')),
         [investmentsSummary]);
 
+    const bankAccountBalances = useMemo(() => {
+        const balances: Record<string, number> = {};
+        bankAccounts.forEach(bank => {
+            let balance = bank.initial_balance || 0;
+            const initialDate = bank.initial_balance_date || '1900-01-01';
+
+            // Filtra entradas pagas para este banco APÓS a data do saldo inicial
+            const relevantEntries = financialEntries.filter(e =>
+                e.bank_account_id === bank.id &&
+                e.status === 'paid' &&
+                (e.due_date.split('T')[0] > initialDate)
+            );
+
+            relevantEntries.forEach(e => {
+                if (e.type === 'receivable') balance += e.amount;
+                else balance -= e.amount;
+            });
+            balances[bank.id] = balance;
+        });
+        return balances;
+    }, [bankAccounts, financialEntries]);
+
     const dreData = useMemo(() => {
         const periodSales = sales.filter(s => {
             const d = new Date(s.sale_date);
@@ -2177,10 +2199,7 @@ const AdminDashboard: React.FC = () => {
             entries: investmentEntries
         } : null;
 
-        // Calculate Initial Balance for the period
-        // Formula: For each bank, sum initial_balance + entries with due_date after that bank's initial_balance_date but before period start
-        // Using ONLY due_date (vencimento) as the criteria
-
+        // Calculate Initial Balance for the period (ONLY PAID entries)
         let initialBalance = 0;
 
         const filteredBanks = cfSelectedAccountId
@@ -2192,27 +2211,29 @@ const AdminDashboard: React.FC = () => {
 
             // Only include banks that existed before the period start
             if (bankInitialDate < periodStartStr) {
-                // Add this bank's initial balance
                 initialBalance += (bank.initial_balance || 0);
 
-                // Add entries for THIS bank with due_date AFTER (not on) initial_balance_date and BEFORE period start
-                // These entries happened after the balance snapshot date
+                // Entries for THIS bank with due_date AFTER bankInitialDate and BEFORE period start
                 const bankEntriesAfterInitial = financialEntries.filter(e => {
                     const dueDate = e.due_date.split('T')[0];
                     return e.bank_account_id === bank.id &&
-                        dueDate > bankInitialDate && // After the initial balance date
-                        dueDate < periodStartStr;   // Before the period
+                        e.status === 'paid' &&
+                        dueDate > bankInitialDate &&
+                        dueDate < periodStartStr;
                 });
 
                 bankEntriesAfterInitial.forEach(e => {
-                    if (e.type === 'receivable') {
-                        initialBalance += e.amount;
-                    } else {
-                        initialBalance -= e.amount;
-                    }
+                    if (e.type === 'receivable') initialBalance += e.amount;
+                    else initialBalance -= e.amount;
                 });
             }
         });
+
+        // Calculate Paid Impact WITHIN the period for the Projected Balance
+        const paidEntriesInPeriod = filteredEntries.filter(e => e.status === 'paid');
+        const periodPaidImpact = paidEntriesInPeriod.reduce((acc, e) => {
+            return acc + (e.type === 'receivable' ? e.amount : -e.amount);
+        }, 0);
 
         return {
             filteredEntries,
@@ -2225,6 +2246,7 @@ const AdminDashboard: React.FC = () => {
             totalInvestments,
             totalNetTransfers,
             totalNetInvestmentsBankImpact,
+            periodPaidImpact,
             initialBalance
         };
     };
@@ -3368,10 +3390,10 @@ const AdminDashboard: React.FC = () => {
                         totalExpense,
                         totalInvestments,
                         totalNetTransfers,
-                        totalNetInvestmentsBankImpact,
+                        periodPaidImpact,
                         initialBalance
                     } = getCashFlowMetrics();
-                    const projectedBalance = initialBalance + totalIncome - totalExpense + totalNetTransfers + totalNetInvestmentsBankImpact;
+                    const projectedBalance = initialBalance + periodPaidImpact;
                     const filteredListEntries = getFilteredFinancialEntries();
 
                     const toggleGroup = (id: string) => {
@@ -4357,7 +4379,7 @@ const AdminDashboard: React.FC = () => {
                                             <div key={bank.id} className="bg-white p-5 rounded-[28px] border border-gray-100 flex justify-between items-center shadow-sm hover:border-gray-200 transition-colors">
                                                 <div className="min-w-0">
                                                     <p className="text-[9px] font-black text-gray-300 uppercase truncate mb-1">{bank.name}</p>
-                                                    <p className="text-sm font-black text-gray-800 truncate tracking-tight">R$ {bank.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                    <p className="text-sm font-black text-gray-800 truncate tracking-tight">R$ {(bankAccountBalances[bank.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                 </div>
                                                 <button onClick={() => { setAccountForm(bank); setIsAccountModalOpen(true); }} className="h-8 w-8 bg-gray-50 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
                                                     <span className="material-symbols-outlined text-sm">edit</span>
