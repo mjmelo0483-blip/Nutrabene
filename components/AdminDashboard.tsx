@@ -2144,11 +2144,40 @@ const AdminDashboard: React.FC = () => {
         const totalIncome = operationalEntries.filter(e => e.type === 'receivable').reduce((acc, e) => acc + e.amount, 0);
         const totalExpense = operationalEntries.filter(e => e.type === 'payable').reduce((acc, e) => acc + e.amount, 0);
 
-        // Investment Metrics
+        // Special Groupings: Transfers and Investments
+        const transferEntries = filteredEntries.filter(e => e.payment_method === 'transfer');
         const investmentEntries = filteredEntries.filter(e => e.payment_method === 'investment');
+
+        const totalNetTransfers = transferEntries.reduce((acc, e) => {
+            return acc + (e.type === 'receivable' ? e.amount : -e.amount);
+        }, 0);
+
+        const totalNetInvestmentsBankImpact = investmentEntries.reduce((acc, e) => {
+            return acc + (e.type === 'receivable' ? e.amount : -e.amount);
+        }, 0);
+
+        // Investment Net Change (for the Investment Card)
         const totalInvestments = investmentEntries.reduce((acc, e) => {
             return acc + (e.type === 'payable' ? e.amount : -e.amount);
         }, 0);
+
+        const transferGroup = transferEntries.length > 0 ? {
+            id: 'transfers-group',
+            name: 'Transferências entre Contas',
+            type: 'special',
+            total: totalNetTransfers,
+            count: transferEntries.length,
+            entries: transferEntries
+        } : null;
+
+        const investmentGroup = investmentEntries.length > 0 ? {
+            id: 'investments-group',
+            name: 'Movimentações de Investimento',
+            type: 'special',
+            total: totalNetInvestmentsBankImpact,
+            count: investmentEntries.length,
+            entries: investmentEntries
+        } : null;
 
         // Calculate Initial Balance for the period
         // Formula: For each bank, sum initial_balance + entries with due_date after that bank's initial_balance_date but before period start
@@ -2174,9 +2203,7 @@ const AdminDashboard: React.FC = () => {
                     const dueDate = e.due_date.split('T')[0];
                     return e.bank_account_id === bank.id &&
                         dueDate > bankInitialDate && // After the initial balance date
-                        dueDate < periodStartStr &&   // Before the period
-                        e.payment_method !== 'transfer' &&
-                        e.payment_method !== 'investment';
+                        dueDate < periodStartStr;   // Before the period
                 });
 
                 bankEntriesAfterInitial.forEach(e => {
@@ -2193,9 +2220,13 @@ const AdminDashboard: React.FC = () => {
             filteredEntries,
             incomeGroups,
             expenseGroups,
+            transferGroup,
+            investmentGroup,
             totalIncome,
             totalExpense,
             totalInvestments,
+            totalNetTransfers,
+            totalNetInvestmentsBankImpact,
             initialBalance
         };
     };
@@ -3330,8 +3361,19 @@ const AdminDashboard: React.FC = () => {
                 )}
                 {/* Finance Tab */}
                 {activeTab === 'finances' && (() => {
-                    const { incomeGroups, expenseGroups, totalIncome, totalExpense, totalInvestments, initialBalance } = getCashFlowMetrics();
-                    const projectedBalance = initialBalance + totalIncome - totalExpense;
+                    const {
+                        incomeGroups,
+                        expenseGroups,
+                        transferGroup,
+                        investmentGroup,
+                        totalIncome,
+                        totalExpense,
+                        totalInvestments,
+                        totalNetTransfers,
+                        totalNetInvestmentsBankImpact,
+                        initialBalance
+                    } = getCashFlowMetrics();
+                    const projectedBalance = initialBalance + totalIncome - totalExpense + totalNetTransfers + totalNetInvestmentsBankImpact;
                     const filteredListEntries = getFilteredFinancialEntries();
 
                     const toggleGroup = (id: string) => {
@@ -3708,6 +3750,70 @@ const AdminDashboard: React.FC = () => {
                                             )}
                                         </div>
                                     </section>
+
+                                    {/* Movimentações Especiais Section */}
+                                    {(transferGroup || investmentGroup) && (
+                                        <section className="space-y-4">
+                                            <div className="flex items-center gap-4">
+                                                <span className="px-4 py-1.5 bg-purple-500/10 text-purple-500 text-[10px] font-black uppercase tracking-widest rounded-full">Movimentações de Conta & Investimento</span>
+                                                <div className="h-px bg-gray-100 flex-1"></div>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                {[transferGroup, investmentGroup].filter(Boolean).map((group: any) => (
+                                                    <div key={group.id} className="bg-white rounded-3xl border shadow-sm overflow-hidden group">
+                                                        <button
+                                                            onClick={() => toggleGroup(group.id)}
+                                                            className="w-full p-6 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                                                        >
+                                                            <div className="flex items-center gap-4 text-left">
+                                                                <div className={`h-10 w-10 ${group.id === 'transfers-group' ? 'bg-blue-50 text-blue-500' : 'bg-purple-50 text-purple-500'} rounded-xl flex items-center justify-center`}>
+                                                                    <span className="material-symbols-outlined text-sm font-bold">{group.id === 'transfers-group' ? 'sync_alt' : 'trending_up'}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="font-black text-gray-800 text-sm">{group.name}</h3>
+                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{group.count} LANÇAMENTOS</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-6">
+                                                                <span className={`text-sm font-black ${group.total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                    {group.total >= 0 ? '+ ' : '- '} R$ {Math.abs(group.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                                <span className={`material-symbols-outlined text-gray-300 transition-transform duration-300 ${expandedCFGroups.has(group.id) ? 'rotate-180' : ''}`}>expand_more</span>
+                                                            </div>
+                                                        </button>
+
+                                                        {expandedCFGroups.has(group.id) && (
+                                                            <div className="bg-gray-50/50 border-t border-gray-100 animate-in slide-in-from-top-2 duration-300">
+                                                                <table className="w-full text-xs">
+                                                                    <thead>
+                                                                        <tr className="text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                                                            <th className="px-4 py-3">Data</th>
+                                                                            <th className="px-4 py-3">Descrição</th>
+                                                                            <th className="px-4 py-3">Conta</th>
+                                                                            <th className="px-4 py-3 text-right">Valor</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-gray-100/50">
+                                                                        {group.entries.map((e: any) => (
+                                                                            <tr key={e.id} className="hover:bg-white transition-colors">
+                                                                                <td className="px-4 py-4 font-bold text-gray-400">{formatDate(e.due_date)}</td>
+                                                                                <td className="px-4 py-4 font-black text-gray-700">{e.description}</td>
+                                                                                <td className="px-4 py-4 font-bold text-gray-400">{bankAccounts.find(b => b.id === e.bank_account_id)?.name || 'N/A'}</td>
+                                                                                <td className={`px-4 py-4 text-right font-black ${e.type === 'receivable' ? 'text-green-600' : 'text-red-600'}`}>
+                                                                                    {e.type === 'receivable' ? '+ ' : '- '} R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </section>
+                                    )}
                                 </>
                             ) : financeViewMode === 'list' ? (
                                 <section className="space-y-6">
