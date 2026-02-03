@@ -2847,64 +2847,110 @@ const AdminDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Cartões e Alocação */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                            {/* Cartões Consolidados */}
-                            <div className="lg:col-span-2 bg-gradient-to-br from-blue-600 to-blue-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-white/20 transition-all duration-1000"></div>
-                                <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full -ml-32 -mb-32 blur-3xl"></div>
+                        {/* Vendas e Faturamento */}
+                        <div className="flex items-center gap-4">
+                            <span className="px-4 py-1.5 bg-blue-500/10 text-blue-500 text-[10px] font-black uppercase tracking-widest rounded-full">Desempenho de Vendas (Operacional)</span>
+                            <div className="h-px bg-gray-100 flex-1"></div>
+                        </div>
 
-                                <div className="relative flex justify-between items-center mb-10">
-                                    <div>
-                                        <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest opacity-70">Cartões Consolidados</p>
-                                        <h3 className="text-2xl font-black text-white uppercase mt-1">Status de Crédito</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            {/* Faturamento Bruto */}
+                            <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Faturamento Bruto</p>
+                                    <span className="material-symbols-outlined text-blue-100 group-hover:text-blue-400 transition-colors">monetization_on</span>
+                                </div>
+                                <p className="text-xl font-black text-gray-800">
+                                    R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
+
+                            {/* Comissões */}
+                            <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Comissões Pagas</p>
+                                    <span className="material-symbols-outlined text-amber-100 group-hover:text-amber-400 transition-colors">handshake</span>
+                                </div>
+                                <p className="text-xl font-black text-amber-600">
+                                    - R$ {totalCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
+
+                            {/* Descontos */}
+                            <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Descontos Aplicados</p>
+                                    <span className="material-symbols-outlined text-red-100 group-hover:text-red-400 transition-colors">sell</span>
+                                </div>
+                                <p className="text-xl font-black text-red-600">
+                                    - R$ {totalDiscounts.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
+
+                            {/* Faturamento Líquido */}
+                            <div className="bg-primary/5 p-6 rounded-[32px] border border-primary/20 shadow-sm group hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <div className="flex flex-col">
+                                        <p className="text-[10px] font-black text-primary uppercase tracking-widest">Faturamento Líquido</p>
+                                        <p className="text-[8px] font-bold text-primary/60 uppercase">Resultado Operacional</p>
                                     </div>
-                                    <div className="h-12 w-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center text-white">
-                                        <span className="material-symbols-outlined text-2xl">credit_card</span>
+                                    <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">account_balance</span>
+                                </div>
+                                <p className="text-xl font-black text-primary">
+                                    R$ {finalNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Cartões e Alocação */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Cartões Consolidados */}
+                            <div className="lg:col-span-2 bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-[32px] shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -mr-20 -mt-20 blur-2xl"></div>
+
+                                <div className="relative flex justify-between items-center mb-6">
+                                    <div>
+                                        <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest opacity-70">Cartões Consolidados</p>
+                                        <h3 className="text-lg font-black text-white uppercase">Status de Crédito</h3>
+                                    </div>
+                                    <div className="h-10 w-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white">
+                                        <span className="material-symbols-outlined">credit_card</span>
                                     </div>
                                 </div>
 
-                                <div className="relative space-y-8">
+                                <div className="relative space-y-4 max-h-48 overflow-y-auto pr-2">
                                     {creditCards.length === 0 ? (
-                                        <div className="text-center py-10 text-white/50 font-bold border-2 border-dashed border-white/20 rounded-3xl bg-white/5">
+                                        <div className="text-center py-6 text-white/50 font-bold border border-dashed border-white/20 rounded-2xl bg-white/5 text-sm">
                                             Nenhum cartão cadastrado.
                                         </div>
                                     ) : (
                                         creditCards.map(card => {
-                                            // Calcula o valor gasto não pago (mesma lógica do getCardMetrics)
                                             const unpaidEntries = financialEntries.filter(e => e.credit_card_id === card.id && e.status !== 'paid');
                                             const spent = unpaidEntries.reduce((acc, e) => acc + e.amount, 0);
                                             const available = Math.max(0, card.limit_amount - spent);
                                             const usagePercent = (spent / card.limit_amount) * 100;
 
                                             return (
-                                                <div key={card.id} className="space-y-4">
-                                                    <div className="flex justify-between items-end">
+                                                <div key={card.id} className="space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <h4 className="text-sm font-black text-white uppercase">{card.name}</h4>
+                                                        <span className="flex items-center gap-1 text-[8px] font-black text-emerald-400 uppercase">
+                                                            <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Ativo
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between text-[10px]">
                                                         <div>
-                                                            <h4 className="text-lg font-black text-white uppercase">{card.name}</h4>
-                                                            <p className="text-[10px] font-bold text-blue-100 opacity-70 uppercase tracking-widest">Titular: Usuário VIP</p>
+                                                            <span className="text-blue-100 opacity-60">Disponível: </span>
+                                                            <span className="font-black text-white">R$ {available.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                                         </div>
-                                                        <div className="text-right">
-                                                            <span className="flex items-center gap-2 text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">
-                                                                <span className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse"></span> Ativo
-                                                            </span>
+                                                        <div>
+                                                            <span className="text-blue-100 opacity-60">Limite: </span>
+                                                            <span className="font-black text-white">R$ {card.limit_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                                         </div>
                                                     </div>
-
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div>
-                                                            <p className="text-[10px] font-bold text-blue-100 opacity-60 uppercase mb-1">Disponível</p>
-                                                            <p className="text-xl font-black text-white">R$ {available.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="text-[10px] font-bold text-blue-100 opacity-60 uppercase mb-1">Limite Total</p>
-                                                            <p className="text-xl font-black text-white">R$ {card.limit_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="relative h-3 w-full bg-black/20 rounded-full overflow-hidden border border-white/10 shadow-inner">
+                                                    <div className="relative h-2 w-full bg-black/20 rounded-full overflow-hidden">
                                                         <div
-                                                            className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-white shadow-[0_0_15px_rgba(52,211,153,0.5)] transition-all duration-1000 ease-out"
+                                                            className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-white transition-all duration-500"
                                                             style={{ width: `${100 - usagePercent}%` }}
                                                         ></div>
                                                     </div>
@@ -2915,17 +2961,17 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Alocação de Ativos */}
-                            <div className="bg-white p-8 rounded-[40px] border shadow-sm flex flex-col">
-                                <h3 className="text-lg font-black text-gray-800 uppercase tracking-widest mb-8 flex items-center justify-between">
-                                    Alocação de Ativos
-                                    <span className="material-symbols-outlined text-gray-300">pie_chart</span>
-                                </h3>
+                            {/* Alocação de Ativos - Compacto */}
+                            <div className="bg-white p-6 rounded-[32px] border shadow-sm flex flex-col">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Alocação de Ativos</h3>
+                                    <span className="material-symbols-outlined text-gray-300 text-lg">pie_chart</span>
+                                </div>
 
-                                <div className="flex-1 flex flex-col items-center justify-center py-6">
-                                    <div className="relative h-48 w-48 rounded-full flex items-center justify-center group">
+                                <div className="flex-1 flex items-center gap-6">
+                                    <div className="relative h-28 w-28 flex-shrink-0">
                                         <div
-                                            className="absolute inset-0 rounded-full transition-transform duration-1000 group-hover:scale-105"
+                                            className="absolute inset-0 rounded-full"
                                             style={{
                                                 background: totalInvestimentos > 0
                                                     ? `conic-gradient(${uniqueInvestmentNames.map((name, i, arr) => {
@@ -2938,31 +2984,26 @@ const AdminDashboard: React.FC = () => {
                                                     : '#e5e7eb'
                                             }}
                                         ></div>
+                                        <div className="absolute inset-4 rounded-full bg-white flex items-center justify-center">
+                                            <span className="text-[8px] font-bold text-gray-400 text-center">TOTAL<br /><span className="text-gray-800 text-[10px]">R$ {(totalInvestimentos / 1000).toFixed(1)}k</span></span>
+                                        </div>
                                     </div>
 
-                                    {/* Asset Allocation Legend */}
-                                    <div className="mt-8 space-y-4 w-full px-4">
-                                        {uniqueInvestmentNames.map((name, i) => {
+                                    <div className="flex-1 space-y-2 max-h-32 overflow-y-auto">
+                                        {uniqueInvestmentNames.slice(0, 5).map((name, i) => {
                                             const colors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899'];
                                             const amount = investmentsSummary[name] || 0;
                                             const percent = totalInvestimentos > 0 ? (amount / totalInvestimentos) * 100 : 0;
                                             return (
-                                                <div key={name} className="flex items-center justify-between group/item">
-                                                    <div className="flex items-center gap-3">
+                                                <div key={name} className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
                                                         <div className="h-2 w-2 rounded-full" style={{ backgroundColor: colors[i % colors.length] }}></div>
-                                                        <span className="text-[10px] font-black text-gray-500 group-hover/item:text-gray-800 transition-colors capitalize">{name}</span>
+                                                        <span className="text-[9px] font-bold text-gray-500 uppercase truncate max-w-[80px]">{name}</span>
                                                     </div>
-                                                    <span className="text-[10px] font-black text-gray-800">{percent.toFixed(1)}%</span>
+                                                    <span className="text-[9px] font-black text-gray-800">{percent.toFixed(1)}%</span>
                                                 </div>
                                             );
                                         })}
-                                    </div>
-
-                                    <div className="mt-8 pt-8 border-t w-full text-center">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Investido</p>
-                                        <p className="text-2xl font-black text-gray-800">
-                                            R$ {totalInvestimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -3029,8 +3070,8 @@ const AdminDashboard: React.FC = () => {
                                                 }
                                             }}
                                             className={`text-left p-4 rounded-2xl border transition-all ${item.hasSubcategories && !despesasDrillDown.isSubLevel
-                                                    ? 'hover:bg-gray-50 cursor-pointer hover:border-gray-300'
-                                                    : 'cursor-default'
+                                                ? 'hover:bg-gray-50 cursor-pointer hover:border-gray-300'
+                                                : 'cursor-default'
                                                 }`}
                                         >
                                             <div className="flex items-center gap-2 mb-2">
