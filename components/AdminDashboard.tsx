@@ -3489,7 +3489,7 @@ const AdminDashboard: React.FC = () => {
                                     periodPaidImpact,
                                     initialBalance
                                 } = getCashFlowMetrics();
-                                const projectedBalance = initialBalance + periodPaidImpact;
+                                const projectedBalance = initialBalance + totalIncome - totalExpense + totalInvestments;
                                 const filteredListEntries = getFilteredFinancialEntries();
 
                                 const toggleGroup = (id: string) => {
