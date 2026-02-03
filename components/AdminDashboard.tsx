@@ -1019,6 +1019,36 @@ const AdminDashboard: React.FC = () => {
             const { id, ...updateData } = editingProduct;
             const { error: updError } = await supabase.from('products').update(updateData).eq('id', id);
             error = updError;
+
+            if (!error) {
+                const { data: existingInit } = await supabase.from('inventory_movements')
+                    .select('id')
+                    .eq('product_id', id)
+                    .eq('type', 'initial')
+                    .maybeSingle();
+
+                if (existingInit) {
+                    await supabase.from('inventory_movements').update({
+                        quantity: editingProduct.initial_stock || 0,
+                        movement_date: editingProduct.initial_stock_date || new Date().toISOString().split('T')[0],
+                        expiration_date: editingProduct.expiration_date,
+                        lot_number: editingProduct.lot_number,
+                        unit_cost: editingProduct.cost_price || 0
+                    }).eq('id', existingInit.id);
+                } else if ((editingProduct.initial_stock || 0) > 0) {
+                    await supabase.from('inventory_movements').insert([{
+                        product_id: id,
+                        type: 'initial',
+                        quantity: editingProduct.initial_stock,
+                        unit_cost: editingProduct.cost_price || 0,
+                        movement_date: editingProduct.initial_stock_date || new Date().toISOString().split('T')[0],
+                        expiration_date: editingProduct.expiration_date,
+                        lot_number: editingProduct.lot_number,
+                        reason: 'Estoque Inicial'
+                    }]);
+                }
+                await syncProductData(id);
+            }
         } else {
             const { error: insError } = await supabase.from('products').insert([editingProduct]);
             error = insError;
