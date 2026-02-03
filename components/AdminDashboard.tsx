@@ -987,13 +987,32 @@ const AdminDashboard: React.FC = () => {
         let remainingOut = totalOut;
         let activeExp = null;
         let activeLot = null;
-        for (const m of inflows) {
-            if (remainingOut >= m.quantity) {
-                remainingOut -= m.quantity;
-            } else {
-                activeExp = m.expiration_date;
-                activeLot = m.lot_number;
-                break;
+
+        if (inflows.length > 0) {
+            for (const m of inflows) {
+                // If this is a movement with quantity, check if it's consumed by sales
+                if (m.quantity > 0) {
+                    if (remainingOut >= m.quantity) {
+                        remainingOut -= m.quantity;
+                        // If it's the last movement and it's fully consumed, we still use its metadata as fallback
+                        if (inflows.indexOf(m) === inflows.length - 1) {
+                            activeExp = m.expiration_date;
+                            activeLot = m.lot_number;
+                        }
+                    } else {
+                        // Not fully consumed, this is the active lot
+                        activeExp = m.expiration_date;
+                        activeLot = m.lot_number;
+                        break;
+                    }
+                } else {
+                    // Movement with 0 quantity (initial setup or metadata)
+                    // We use it as the active one if there's no better candidate yet or it's the last one
+                    if (!activeExp || inflows.indexOf(m) === inflows.length - 1) {
+                        activeExp = m.expiration_date;
+                        activeLot = m.lot_number;
+                    }
+                }
             }
         }
 
@@ -1035,7 +1054,7 @@ const AdminDashboard: React.FC = () => {
                         lot_number: editingProduct.lot_number,
                         unit_cost: editingProduct.cost_price || 0
                     }).eq('id', existingInit.id);
-                } else if ((editingProduct.initial_stock || 0) > 0) {
+                } else if ((editingProduct.initial_stock || 0) > 0 || editingProduct.lot_number || editingProduct.expiration_date) {
                     await supabase.from('inventory_movements').insert([{
                         product_id: id,
                         type: 'initial',
