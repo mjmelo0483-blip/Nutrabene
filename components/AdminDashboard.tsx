@@ -242,6 +242,7 @@ const AdminDashboard: React.FC = () => {
     const [cfBaseDate, setCfBaseDate] = useState<Date>(new Date());
     const [expandedCFGroups, setExpandedCFGroups] = useState<Set<string>>(new Set());
     const [cfSelectedAccountId, setCfSelectedAccountId] = useState<string>('');
+    const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] = useState<string | null>(null);
 
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [transferForm, setTransferForm] = useState({
@@ -397,6 +398,87 @@ const AdminDashboard: React.FC = () => {
 
         return Object.values(categoriesMap).sort((a, b) => b.amount - a.amount);
     }, [financialEntries, categories, filterMonth, filterYear]);
+
+    // Drill-down de despesas por categoria (para o Dashboard)
+    const despesasDrillDown = useMemo(() => {
+        const colors = [
+            '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6',
+            '#ef4444', '#06b6d4', '#f97316', '#84cc16', '#6366f1'
+        ];
+
+        const entries = financialEntries.filter(e => {
+            const date = new Date(e.due_date);
+            const isPayable = e.type === 'payable';
+            // Excluir transferências e aplicações
+            const isTransfer = e.payment_method === 'transfer';
+            const isApplication = e.payment_method === 'investment' && e.description?.toLowerCase().includes('aplicação');
+            return isPayable && date.getMonth() === filterMonth && date.getFullYear() === filterYear && !isTransfer && !isApplication;
+        });
+
+        const totalGeral = entries.reduce((acc, e) => acc + e.amount, 0);
+
+        // Se uma categoria está selecionada, mostrar suas subcategorias
+        if (selectedExpenseCategoryId) {
+            const parentCat = categories.find(c => c.id === selectedExpenseCategoryId);
+            const subcategories = categories.filter(c => c.parent_id === selectedExpenseCategoryId);
+
+            if (subcategories.length > 0) {
+                const subcatMap: Record<string, { id: string; name: string; amount: number; color: string }> = {};
+                let colorIndex = 0;
+
+                entries.forEach(e => {
+                    const cat = categories.find(c => c.id === e.category_id);
+                    if (cat && (cat.parent_id === selectedExpenseCategoryId || cat.id === selectedExpenseCategoryId)) {
+                        const name = cat.parent_id === selectedExpenseCategoryId ? cat.name : 'Outros';
+                        const id = cat.id;
+                        if (!subcatMap[id]) {
+                            subcatMap[id] = { id, name, amount: 0, color: colors[colorIndex++ % colors.length] };
+                        }
+                        subcatMap[id].amount += e.amount;
+                    }
+                });
+
+                const items = Object.values(subcatMap).sort((a, b) => b.amount - a.amount);
+                const total = items.reduce((acc, i) => acc + i.amount, 0);
+                return { items, total, parentName: parentCat?.name || '', isSubLevel: true };
+            }
+        }
+
+        // Nível principal: categorias pai
+        const parentMap: Record<string, { id: string; name: string; amount: number; color: string; hasSubcategories: boolean }> = {};
+        let colorIndex = 0;
+
+        entries.forEach(e => {
+            const cat = categories.find(c => c.id === e.category_id);
+            if (cat) {
+                // Se a categoria tem parent_id, somar no pai
+                const parentCatId = cat.parent_id || cat.id;
+                const parentCat = cat.parent_id ? categories.find(c => c.id === cat.parent_id) : cat;
+                const parentName = parentCat?.name || 'Outros';
+
+                if (!parentMap[parentCatId]) {
+                    const hasSubcategories = categories.some(c => c.parent_id === parentCatId);
+                    parentMap[parentCatId] = {
+                        id: parentCatId,
+                        name: parentName,
+                        amount: 0,
+                        color: colors[colorIndex++ % colors.length],
+                        hasSubcategories
+                    };
+                }
+                parentMap[parentCatId].amount += e.amount;
+            } else {
+                // Categoria não encontrada
+                if (!parentMap['outros']) {
+                    parentMap['outros'] = { id: 'outros', name: 'Outros', amount: 0, color: colors[colorIndex++ % colors.length], hasSubcategories: false };
+                }
+                parentMap['outros'].amount += e.amount;
+            }
+        });
+
+        const items = Object.values(parentMap).sort((a, b) => b.amount - a.amount);
+        return { items, total: totalGeral, parentName: '', isSubLevel: false };
+    }, [financialEntries, categories, filterMonth, filterYear, selectedExpenseCategoryId]);
 
     const investmentsSummary = useMemo(() => {
         const summary: Record<string, number> = {};
@@ -2882,6 +2964,95 @@ const AdminDashboard: React.FC = () => {
                                             R$ {totalInvestimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Despesas por Categoria */}
+                        <div className="bg-white rounded-[40px] border shadow-sm p-8">
+                            <div className="flex justify-between items-center mb-8">
+                                <div className="flex items-center gap-4">
+                                    {despesasDrillDown.isSubLevel && (
+                                        <button
+                                            onClick={() => setSelectedExpenseCategoryId(null)}
+                                            className="h-10 w-10 bg-gray-100 rounded-2xl flex items-center justify-center hover:bg-gray-200 transition-all"
+                                        >
+                                            <span className="material-symbols-outlined text-gray-500">arrow_back</span>
+                                        </button>
+                                    )}
+                                    <div>
+                                        <h3 className="text-lg font-black text-gray-800">
+                                            {despesasDrillDown.isSubLevel ? despesasDrillDown.parentName : 'Despesas por Categoria'}
+                                        </h3>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                            {new Date(filterYear, filterMonth).toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                            {despesasDrillDown.isSubLevel && ' • Subcategorias'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Donut Chart */}
+                                <div className="flex flex-col items-center justify-center">
+                                    <div className="relative h-52 w-52">
+                                        <div
+                                            className="absolute inset-0 rounded-full transition-all duration-500"
+                                            style={{
+                                                background: despesasDrillDown.items.length > 0
+                                                    ? `conic-gradient(${despesasDrillDown.items.map((item, i, arr) => {
+                                                        const prevSum = arr.slice(0, i).reduce((acc, curr) => acc + curr.amount, 0);
+                                                        const start = despesasDrillDown.total > 0 ? (prevSum / despesasDrillDown.total) * 100 : 0;
+                                                        const end = despesasDrillDown.total > 0 ? start + (item.amount / despesasDrillDown.total) * 100 : 0;
+                                                        return `${item.color} ${start}% ${end}%`;
+                                                    }).join(', ')})`
+                                                    : '#e5e7eb'
+                                            }}
+                                        />
+                                        <div className="absolute inset-6 rounded-full bg-white flex flex-col items-center justify-center shadow-inner">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Mês</p>
+                                            <p className="text-xl font-black text-gray-800">
+                                                R$ {despesasDrillDown.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Categories List */}
+                                <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-4 content-start">
+                                    {despesasDrillDown.items.slice(0, 12).map((item: any) => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => {
+                                                if (item.hasSubcategories && !despesasDrillDown.isSubLevel) {
+                                                    setSelectedExpenseCategoryId(item.id);
+                                                }
+                                            }}
+                                            className={`text-left p-4 rounded-2xl border transition-all ${item.hasSubcategories && !despesasDrillDown.isSubLevel
+                                                    ? 'hover:bg-gray-50 cursor-pointer hover:border-gray-300'
+                                                    : 'cursor-default'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div
+                                                    className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                                                    style={{ backgroundColor: item.color }}
+                                                />
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide truncate">
+                                                    {item.name}
+                                                </span>
+                                                {item.hasSubcategories && !despesasDrillDown.isSubLevel && (
+                                                    <span className="material-symbols-outlined text-[12px] text-gray-400">chevron_right</span>
+                                                )}
+                                            </div>
+                                            <p className="text-sm font-black text-gray-800">
+                                                R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </p>
+                                            <p className="text-[9px] text-gray-400 font-bold mt-1">
+                                                {despesasDrillDown.total > 0 ? ((item.amount / despesasDrillDown.total) * 100).toFixed(1) : 0}%
+                                            </p>
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
