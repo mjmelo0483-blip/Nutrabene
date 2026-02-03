@@ -3802,10 +3802,10 @@ const AdminDashboard: React.FC = () => {
                                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-center mb-4">
-                                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Saldo Inicial</p>
-                                                    <span className="material-symbols-outlined text-blue-500/30 group-hover:text-blue-500 transition-colors">account_balance_wallet</span>
+                                                    <p className={`text-[10px] font-black uppercase tracking-widest ${initialBalance < 0 ? 'text-red-500' : 'text-blue-500'}`}>Saldo Inicial</p>
+                                                    <span className={`material-symbols-outlined group-hover:opacity-100 transition-colors ${initialBalance < 0 ? 'text-red-500/30' : 'text-blue-500/30'}`}>account_balance_wallet</span>
                                                 </div>
-                                                <p className="text-xl font-black text-blue-600">R$ {initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                <p className={`text-xl font-black ${initialBalance < 0 ? 'text-red-600' : 'text-blue-600'}`}>R$ {initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                             </div>
                                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-center mb-4">
