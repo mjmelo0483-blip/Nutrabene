@@ -2363,8 +2363,9 @@ const AdminDashboard: React.FC = () => {
             entries: investmentEntries
         } : null;
 
-        // Calculate Initial Balance for the period (ONLY PAID entries)
+        // Calculate Initial Balance for the period (Projected and Realized)
         let initialBalance = 0;
+        let realizedInitialBalance = 0;
 
         const filteredBanks = cfSelectedAccountId
             ? bankAccounts.filter(b => b.id === cfSelectedAccountId)
@@ -2375,23 +2376,38 @@ const AdminDashboard: React.FC = () => {
 
             // Only include banks that existed before the period start
             if (bankInitialDate < periodStartStr) {
-                initialBalance += (bank.initial_balance || 0);
+                const bInit = (bank.initial_balance || 0);
+                initialBalance += bInit;
+                realizedInitialBalance += bInit;
 
                 // Entries for THIS bank with due_date AFTER bankInitialDate and BEFORE period start
                 const bankEntriesAfterInitial = financialEntries.filter(e => {
                     const dueDate = e.due_date.split('T')[0];
                     return e.bank_account_id === bank.id &&
-                        e.status === 'paid' &&
                         dueDate > bankInitialDate &&
                         dueDate < periodStartStr;
                 });
 
                 bankEntriesAfterInitial.forEach(e => {
-                    if (e.type === 'receivable') initialBalance += e.amount;
-                    else initialBalance -= e.amount;
+                    const impact = e.type === 'receivable' ? e.amount : -e.amount;
+                    initialBalance += impact;
+                    if (e.status === 'paid') realizedInitialBalance += impact;
                 });
             }
         });
+
+        // Entries with NO bank assigned (only count when all accounts are selected)
+        if (!cfSelectedAccountId) {
+            const nullAccountEntries = financialEntries.filter(e =>
+                !e.bank_account_id &&
+                e.due_date.split('T')[0] < periodStartStr
+            );
+            nullAccountEntries.forEach(e => {
+                const impact = e.type === 'receivable' ? e.amount : -e.amount;
+                initialBalance += impact;
+                if (e.status === 'paid') realizedInitialBalance += impact;
+            });
+        }
 
         // Calculate Paid Impact WITHIN the period for the Projected Balance
         const paidEntriesInPeriod = filteredEntries.filter(e => e.status === 'paid');
@@ -2411,7 +2427,8 @@ const AdminDashboard: React.FC = () => {
             totalNetTransfers,
             totalNetInvestmentsBankImpact,
             periodPaidImpact,
-            initialBalance
+            initialBalance,
+            realizedInitialBalance
         };
     };
 
@@ -3712,9 +3729,10 @@ const AdminDashboard: React.FC = () => {
                             totalInvestments,
                             totalNetTransfers,
                             periodPaidImpact,
-                            initialBalance
+                            initialBalance,
+                            realizedInitialBalance
                         } = getCashFlowMetrics();
-                        const projectedBalance = initialBalance + totalIncome - totalExpense + totalInvestments;
+                        const projectedBalance = initialBalance + totalIncome - totalExpense + totalInvestments + totalNetTransfers;
                         const filteredListEntries = getFilteredFinancialEntries();
 
                         const toggleGroup = (id: string) => {
@@ -3806,6 +3824,11 @@ const AdminDashboard: React.FC = () => {
                                                     <span className={`material-symbols-outlined group-hover:opacity-100 transition-colors ${initialBalance < 0 ? 'text-red-500/30' : 'text-blue-500/30'}`}>account_balance_wallet</span>
                                                 </div>
                                                 <p className={`text-xl font-black ${initialBalance < 0 ? 'text-red-600' : 'text-blue-600'}`}>R$ {initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                {initialBalance !== realizedInitialBalance && (
+                                                    <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-tighter">
+                                                        Realizado: R$ {realizedInitialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    </p>
+                                                )}
                                             </div>
                                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-center mb-4">
