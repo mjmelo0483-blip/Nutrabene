@@ -1019,8 +1019,8 @@ const AdminDashboard: React.FC = () => {
         await supabase.from('products').update({
             stock_quantity: finalStock,
             cost_price: finalCost,
-            expiration_date: activeExp,
-            lot_number: activeLot
+            expiration_date: activeExp || null,
+            lot_number: activeLot || null
         }).eq('id', productId);
     }
 
@@ -1058,7 +1058,7 @@ const AdminDashboard: React.FC = () => {
                     await supabase.from('inventory_movements').insert([{
                         product_id: id,
                         type: 'initial',
-                        quantity: editingProduct.initial_stock,
+                        quantity: editingProduct.initial_stock || 0,
                         unit_cost: editingProduct.cost_price || 0,
                         movement_date: editingProduct.initial_stock_date || new Date().toISOString().split('T')[0],
                         expiration_date: editingProduct.expiration_date,
@@ -1066,6 +1066,16 @@ const AdminDashboard: React.FC = () => {
                         reason: 'Estoque Inicial'
                     }]);
                 }
+
+                // IMPORTANT: Propagate the new expiration/lot to any recent purchase movements 
+                // if they match the OLD metadata or if this is a global correction.
+                // To be safe and meet user expectation, we update all current inflow movements 
+                // for this product to this new metadata when changed in the SKU modal.
+                await supabase.from('inventory_movements').update({
+                    expiration_date: editingProduct.expiration_date,
+                    lot_number: editingProduct.lot_number
+                }).eq('product_id', id).in('type', ['initial', 'purchase']);
+
                 await syncProductData(id);
             }
         } else {
