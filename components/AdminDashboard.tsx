@@ -2783,8 +2783,11 @@ const AdminDashboard: React.FC = () => {
                                         </div>
                                     ) : (
                                         creditCards.map(card => {
-                                            const available = card.limit_amount - card.current_balance;
-                                            const usagePercent = (card.current_balance / card.limit_amount) * 100;
+                                            // Calcula o valor gasto não pago (mesma lógica do getCardMetrics)
+                                            const unpaidEntries = financialEntries.filter(e => e.credit_card_id === card.id && e.status !== 'paid');
+                                            const spent = unpaidEntries.reduce((acc, e) => acc + e.amount, 0);
+                                            const available = Math.max(0, card.limit_amount - spent);
+                                            const usagePercent = (spent / card.limit_amount) * 100;
 
                                             return (
                                                 <div key={card.id} className="space-y-4">
