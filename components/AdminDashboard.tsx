@@ -334,7 +334,26 @@ const AdminDashboard: React.FC = () => {
         return financialEntries
             .filter(e => {
                 const date = new Date(e.due_date);
-                return e.type === 'payable' && date.getMonth() === filterMonth && date.getFullYear() === filterYear;
+                const isInPeriod = date.getMonth() === filterMonth && date.getFullYear() === filterYear;
+                const isPayable = e.type === 'payable';
+                // Excluir transferências e aplicações (investimentos)
+                const isTransfer = e.payment_method === 'transfer';
+                const isApplication = e.payment_method === 'investment' && e.description?.toLowerCase().includes('aplicação');
+                return isPayable && isInPeriod && !isTransfer && !isApplication;
+            })
+            .reduce((acc, e) => acc + e.amount, 0);
+    }, [financialEntries, filterMonth, filterYear]);
+
+    const receitasMensais = useMemo(() => {
+        return financialEntries
+            .filter(e => {
+                const date = new Date(e.due_date);
+                const isInPeriod = date.getMonth() === filterMonth && date.getFullYear() === filterYear;
+                const isReceivable = e.type === 'receivable';
+                // Excluir transferências e resgates
+                const isTransfer = e.payment_method === 'transfer';
+                const isRedemption = e.payment_method === 'investment' && e.description?.toLowerCase().includes('resgate');
+                return isReceivable && isInPeriod && !isTransfer && !isRedemption;
             })
             .reduce((acc, e) => acc + e.amount, 0);
     }, [financialEntries, filterMonth, filterYear]);
@@ -2681,76 +2700,61 @@ const AdminDashboard: React.FC = () => {
 
                 {/* Dashboard Tab */}
                 {activeTab === 'dashboard' && (
-                    <div className="space-y-10 animate-in fade-in duration-500 bg-[#0f172a] -m-6 p-10 min-h-screen">
+                    <div className="space-y-10 animate-in fade-in duration-500">
                         {/* Top Summary Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                             {/* Saldo Total */}
-                            <div className="bg-[#1e293b] p-6 rounded-3xl border border-white/5 shadow-2xl group hover:border-blue-500/50 transition-all">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="h-10 w-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                                        <span className="material-symbols-outlined text-xl">account_balance</span>
-                                    </div>
-                                    <span className="bg-white/5 px-3 py-1 rounded-full text-[9px] font-black text-gray-400 uppercase tracking-widest">Geral</span>
+                            <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saldo Total em Conta</p>
+                                    <span className="material-symbols-outlined text-gray-200 group-hover:text-gray-400 transition-colors">account_balance_wallet</span>
                                 </div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Saldo Total em Conta</p>
-                                <p className="text-2xl font-black text-white whitespace-nowrap">
-                                    R$ {(Object.values(bankAccountBalances) as number[]).reduce((acc, bal) => acc + bal, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <p className="text-xl font-black text-gray-800">
+                                    R$ {(Object.values(bankAccountBalances) as number[]).reduce((acc, bal) => acc + bal, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
 
                             {/* A Pagar Hoje */}
-                            <div className="bg-[#1e293b] p-6 rounded-3xl border border-white/5 shadow-2xl group hover:border-red-500/50 transition-all">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="h-10 w-10 bg-red-500/10 rounded-xl flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
-                                        <span className="material-symbols-outlined text-xl">event_busy</span>
-                                    </div>
-                                    <span className="bg-red-500/10 px-3 py-1 rounded-full text-[9px] font-black text-red-400 uppercase tracking-widest">Pendente</span>
+                            <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">A Pagar Hoje</p>
+                                    <span className="material-symbols-outlined text-red-100 group-hover:text-red-400 transition-colors">event_busy</span>
                                 </div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">A Pagar Hoje</p>
-                                <p className="text-2xl font-black text-white whitespace-nowrap">
-                                    R$ {aPagarHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <p className="text-xl font-black text-gray-800">
+                                    R$ {aPagarHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
 
                             {/* Investimentos */}
-                            <div className="bg-[#1e293b] p-6 rounded-3xl border border-white/5 shadow-2xl group hover:border-purple-500/50 transition-all">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="h-10 w-10 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-                                        <span className="material-symbols-outlined text-xl">trending_up</span>
-                                    </div>
-                                    <span className="bg-purple-500/10 px-3 py-1 rounded-full text-[9px] font-black text-purple-400 uppercase tracking-widest">Ativos</span>
+                            <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimentos</p>
+                                    <span className="material-symbols-outlined text-purple-100 group-hover:text-purple-400 transition-colors">trending_up</span>
                                 </div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Investimentos</p>
-                                <p className="text-2xl font-black text-white whitespace-nowrap">
-                                    R$ {totalInvestimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <p className="text-xl font-black text-gray-800">
+                                    R$ {totalInvestimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
 
                             {/* Receitas */}
-                            <div className="bg-[#1e293b] p-6 rounded-3xl border border-white/5 shadow-2xl group hover:border-emerald-500/50 transition-all">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="h-10 w-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                                        <span className="material-symbols-outlined text-xl">expand_less</span>
-                                    </div>
-                                    <span className="bg-emerald-500/10 px-3 py-1 rounded-full text-[9px] font-black text-emerald-400 uppercase tracking-widest">Este Mês</span>
+                            <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Entradas</p>
+                                    <span className="material-symbols-outlined text-green-100 group-hover:text-green-400 transition-colors">trending_up</span>
                                 </div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Receitas Mensais</p>
-                                <p className="text-2xl font-black text-white whitespace-nowrap">
-                                    R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <p className="text-xl font-black text-gray-800">
+                                    R$ {receitasMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
 
                             {/* Gastos */}
-                            <div className="bg-[#1e293b] p-6 rounded-3xl border border-white/5 shadow-2xl group hover:border-pink-500/50 transition-all">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="h-10 w-10 bg-pink-500/10 rounded-xl flex items-center justify-center text-pink-400 group-hover:scale-110 transition-transform">
-                                        <span className="material-symbols-outlined text-xl">expand_more</span>
-                                    </div>
-                                    <span className="bg-pink-500/10 px-3 py-1 rounded-full text-[9px] font-black text-pink-400 uppercase tracking-widest">Este Mês</span>
+                            <div className="bg-primary p-6 rounded-[32px] shadow-xl shadow-primary/20 group hover:scale-[1.02] transition-all">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">Saídas</p>
+                                    <span className="material-symbols-outlined text-white/30 group-hover:text-white/60 transition-colors">trending_down</span>
                                 </div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Gastos Mensais</p>
-                                <p className="text-2xl font-black text-white whitespace-nowrap">
-                                    R$ {gastosMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <p className="text-xl font-black text-white">
+                                    R$ {gastosMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
                         </div>
@@ -2821,10 +2825,10 @@ const AdminDashboard: React.FC = () => {
                             </div>
 
                             {/* Alocação de Ativos */}
-                            <div className="bg-[#1e293b] p-8 rounded-[40px] border border-white/5 shadow-2xl flex flex-col">
-                                <h3 className="text-lg font-black text-white uppercase tracking-widest mb-8 flex items-center justify-between">
+                            <div className="bg-white p-8 rounded-[40px] border shadow-sm flex flex-col">
+                                <h3 className="text-lg font-black text-gray-800 uppercase tracking-widest mb-8 flex items-center justify-between">
                                     Alocação de Ativos
-                                    <span className="material-symbols-outlined text-gray-500">pie_chart</span>
+                                    <span className="material-symbols-outlined text-gray-300">pie_chart</span>
                                 </h3>
 
                                 <div className="flex-1 flex flex-col items-center justify-center py-6">
@@ -2840,7 +2844,7 @@ const AdminDashboard: React.FC = () => {
                                                         const end = start + ((investmentsSummary[name] || 0) / totalInvestimentos) * 100;
                                                         return `${colors[i % colors.length]} ${start}% ${end}%`;
                                                     }).join(', ')})`
-                                                    : '#334155'
+                                                    : '#e5e7eb'
                                             }}
                                         ></div>
                                     </div>
@@ -2855,17 +2859,17 @@ const AdminDashboard: React.FC = () => {
                                                 <div key={name} className="flex items-center justify-between group/item">
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-2 w-2 rounded-full" style={{ backgroundColor: colors[i % colors.length] }}></div>
-                                                        <span className="text-[10px] font-black text-gray-400 group-hover/item:text-white transition-colors capitalize">{name}</span>
+                                                        <span className="text-[10px] font-black text-gray-500 group-hover/item:text-gray-800 transition-colors capitalize">{name}</span>
                                                     </div>
-                                                    <span className="text-[10px] font-black text-white">{percent.toFixed(1)}%</span>
+                                                    <span className="text-[10px] font-black text-gray-800">{percent.toFixed(1)}%</span>
                                                 </div>
                                             );
                                         })}
                                     </div>
 
-                                    <div className="mt-8 pt-8 border-t border-white/5 w-full text-center">
-                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Investido</p>
-                                        <p className="text-2xl font-black text-white">
+                                    <div className="mt-8 pt-8 border-t w-full text-center">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Investido</p>
+                                        <p className="text-2xl font-black text-gray-800">
                                             R$ {totalInvestimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
                                     </div>
