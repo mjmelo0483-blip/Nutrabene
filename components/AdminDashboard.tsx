@@ -2857,7 +2857,7 @@ const AdminDashboard: React.FC = () => {
                             {/* Faturamento Bruto */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Faturamento Bruto</p>
+                                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Faturamento Bruto</p>
                                     <span className="material-symbols-outlined text-blue-400 transition-colors">monetization_on</span>
                                 </div>
                                 <p className="text-xl font-black text-blue-600">
@@ -2868,7 +2868,7 @@ const AdminDashboard: React.FC = () => {
                             {/* Comissões */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Comissões Pagas</p>
+                                    <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Comissões Pagas</p>
                                     <span className="material-symbols-outlined text-amber-400 transition-colors">handshake</span>
                                 </div>
                                 <p className="text-xl font-black text-amber-600">
@@ -2879,7 +2879,7 @@ const AdminDashboard: React.FC = () => {
                             {/* Descontos */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Descontos Aplicados</p>
+                                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Descontos Aplicados</p>
                                     <span className="material-symbols-outlined text-red-400 transition-colors">sell</span>
                                 </div>
                                 <p className="text-xl font-black text-red-600">
