@@ -3802,31 +3802,31 @@ const AdminDashboard: React.FC = () => {
                                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-center mb-4">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saldo Inicial</p>
-                                                    <span className="material-symbols-outlined text-gray-200 group-hover:text-gray-400 transition-colors">account_balance_wallet</span>
+                                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Saldo Inicial</p>
+                                                    <span className="material-symbols-outlined text-blue-500/30 group-hover:text-blue-500 transition-colors">account_balance_wallet</span>
                                                 </div>
-                                                <p className="text-xl font-black text-gray-800">R$ {initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                <p className="text-xl font-black text-blue-600">R$ {initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                             </div>
                                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-center mb-4">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Entradas</p>
-                                                    <span className="material-symbols-outlined text-green-100 group-hover:text-green-400 transition-colors">trending_up</span>
+                                                    <p className="text-[10px] font-black text-green-600 uppercase tracking-widest">Entradas</p>
+                                                    <span className="material-symbols-outlined text-green-600/30 group-hover:text-green-600 transition-colors">trending_up</span>
                                                 </div>
-                                                <p className="text-xl font-black text-gray-800">R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                <p className="text-xl font-black text-green-600">R$ {totalIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                             </div>
                                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-center mb-4">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saídas</p>
-                                                    <span className="material-symbols-outlined text-red-100 group-hover:text-red-400 transition-colors">trending_down</span>
+                                                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Saídas</p>
+                                                    <span className="material-symbols-outlined text-red-500/30 group-hover:text-red-500 transition-colors">trending_down</span>
                                                 </div>
-                                                <p className="text-xl font-black text-gray-800">- R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                <p className="text-xl font-black text-red-600">- R$ {totalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                             </div>
                                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-center mb-4">
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimentos</p>
-                                                    <span className="material-symbols-outlined text-purple-100 group-hover:text-purple-400 transition-colors">payments</span>
+                                                    <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Investimentos</p>
+                                                    <span className="material-symbols-outlined text-purple-500/30 group-hover:text-purple-500 transition-colors">payments</span>
                                                 </div>
-                                                <p className="text-xl font-black text-gray-800">
+                                                <p className="text-xl font-black text-purple-600">
                                                     {totalInvestments < 0 ? '- ' : (totalInvestments > 0 ? '+ ' : '')}
                                                     R$ {Math.abs(totalInvestments).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                 </p>
