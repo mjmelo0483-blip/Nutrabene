@@ -2753,8 +2753,8 @@ const AdminDashboard: React.FC = () => {
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saídas</p>
                                     <span className="material-symbols-outlined text-red-100 group-hover:text-red-400 transition-colors">trending_down</span>
                                 </div>
-                                <p className="text-xl font-black text-gray-800">
-                                    R$ {gastosMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                <p className="text-xl font-black text-red-500">
+                                    - R$ {gastosMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
                         </div>
