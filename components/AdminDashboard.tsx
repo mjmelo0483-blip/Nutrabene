@@ -2805,10 +2805,10 @@ const AdminDashboard: React.FC = () => {
                             {/* A Pagar Hoje */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">A Pagar Hoje</p>
-                                    <span className="material-symbols-outlined text-red-200 group-hover:text-red-400 transition-colors">event_busy</span>
+                                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">A Pagar Hoje</p>
+                                    <span className="material-symbols-outlined text-red-500/30 group-hover:text-red-500 transition-colors">event_busy</span>
                                 </div>
-                                <p className="text-xl font-black text-gray-800">
+                                <p className="text-xl font-black text-red-500">
                                     R$ {aPagarHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
@@ -2816,10 +2816,10 @@ const AdminDashboard: React.FC = () => {
                             {/* Investimentos */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Investimentos</p>
-                                    <span className="material-symbols-outlined text-purple-200 group-hover:text-purple-400 transition-colors">trending_up</span>
+                                    <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Investimentos</p>
+                                    <span className="material-symbols-outlined text-purple-500/30 group-hover:text-purple-500 transition-colors">trending_up</span>
                                 </div>
-                                <p className="text-xl font-black text-gray-800">
+                                <p className="text-xl font-black text-purple-600">
                                     R$ {totalInvestimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
@@ -2827,10 +2827,10 @@ const AdminDashboard: React.FC = () => {
                             {/* Receitas */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-green-500 uppercase tracking-widest">Entradas</p>
-                                    <span className="material-symbols-outlined text-green-200 group-hover:text-green-500 transition-colors">trending_up</span>
+                                    <p className="text-[10px] font-black text-green-600 uppercase tracking-widest">Entradas</p>
+                                    <span className="material-symbols-outlined text-green-600/30 group-hover:text-green-600 transition-colors">trending_up</span>
                                 </div>
-                                <p className="text-xl font-black text-gray-800">
+                                <p className="text-xl font-black text-green-600">
                                     R$ {receitasMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
@@ -2838,10 +2838,10 @@ const AdminDashboard: React.FC = () => {
                             {/* Gastos */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Saídas</p>
-                                    <span className="material-symbols-outlined text-red-200 group-hover:text-red-400 transition-colors">trending_down</span>
+                                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Saídas</p>
+                                    <span className="material-symbols-outlined text-red-500/30 group-hover:text-red-500 transition-colors">trending_down</span>
                                 </div>
-                                <p className="text-xl font-black text-red-500">
+                                <p className="text-xl font-black text-red-600">
                                     - R$ {gastosMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </p>
                             </div>
