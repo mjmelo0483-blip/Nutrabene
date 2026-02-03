@@ -2708,12 +2708,12 @@ const AdminDashboard: React.FC = () => {
                                 const saldoTotal = (Object.values(bankAccountBalances) as number[]).reduce((acc, bal) => acc + bal, 0);
                                 const isNegative = saldoTotal < 0;
                                 return (
-                                    <div className={`${isNegative ? 'bg-red-500' : 'bg-primary'} p-6 rounded-[32px] shadow-xl ${isNegative ? 'shadow-red-500/20' : 'shadow-primary/20'} group hover:scale-[1.02] transition-all`}>
+                                    <div className="bg-[#8fa976] p-6 rounded-[32px] shadow-xl shadow-[#8fa976]/20 group hover:scale-[1.02] transition-all">
                                         <div className="flex justify-between items-center mb-4">
                                             <p className="text-[10px] font-black text-white/80 uppercase tracking-widest">Saldo Total em Conta</p>
                                             <span className="material-symbols-outlined text-white/30 group-hover:text-white/60 transition-colors">account_balance_wallet</span>
                                         </div>
-                                        <p className="text-xl font-black text-white">
+                                        <p className={`text-xl font-black ${isNegative ? 'text-red-200' : 'text-white'}`}>
                                             R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
                                     </div>
