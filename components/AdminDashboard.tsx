@@ -2398,9 +2398,17 @@ const AdminDashboard: React.FC = () => {
 
         // Entries with NO bank assigned (only count when all accounts are selected)
         if (!cfSelectedAccountId) {
+            // Base reference date for orphans: the earliest date we started tracking any bank
+            const baseReferenceDate = bankAccounts.reduce((min, b) => {
+                const d = b.initial_balance_date || '1900-01-01';
+                if (d === '1900-01-01') return min;
+                return (min === '1900-01-01' || d < min) ? d : min;
+            }, '1900-01-01');
+
             const nullAccountEntries = financialEntries.filter(e =>
                 !e.bank_account_id &&
-                e.due_date.split('T')[0] < periodStartStr
+                e.due_date.split('T')[0] < periodStartStr &&
+                e.due_date.split('T')[0] > baseReferenceDate
             );
             nullAccountEntries.forEach(e => {
                 const impact = e.type === 'receivable' ? e.amount : -e.amount;
