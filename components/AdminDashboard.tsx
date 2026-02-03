@@ -3298,7 +3298,7 @@ const AdminDashboard: React.FC = () => {
                                 Resumo de Lotes Ativos
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {products.filter(p => p.stock_quantity > 0).slice(0, 4).map(p => {
+                                {products.filter(p => p.stock_quantity > 0).map(p => {
                                     const prodMovements = movements.filter(m => m.product_id === p.id);
                                     const inflows = prodMovements
                                         .filter(m => m.type === 'purchase' || m.type === 'initial')
