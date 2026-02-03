@@ -2704,21 +2704,27 @@ const AdminDashboard: React.FC = () => {
                         {/* Top Summary Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                             {/* Saldo Total */}
-                            <div className="bg-primary p-6 rounded-[32px] shadow-xl shadow-primary/20 group hover:scale-[1.02] transition-all">
-                                <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">Saldo Total em Conta</p>
-                                    <span className="material-symbols-outlined text-white/30 group-hover:text-white/60 transition-colors">account_balance_wallet</span>
-                                </div>
-                                <p className="text-xl font-black text-white">
-                                    R$ {(Object.values(bankAccountBalances) as number[]).reduce((acc, bal) => acc + bal, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </p>
-                            </div>
+                            {(() => {
+                                const saldoTotal = (Object.values(bankAccountBalances) as number[]).reduce((acc, bal) => acc + bal, 0);
+                                const isNegative = saldoTotal < 0;
+                                return (
+                                    <div className={`${isNegative ? 'bg-red-500' : 'bg-primary'} p-6 rounded-[32px] shadow-xl ${isNegative ? 'shadow-red-500/20' : 'shadow-primary/20'} group hover:scale-[1.02] transition-all`}>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <p className="text-[10px] font-black text-white/80 uppercase tracking-widest">Saldo Total em Conta</p>
+                                            <span className="material-symbols-outlined text-white/30 group-hover:text-white/60 transition-colors">account_balance_wallet</span>
+                                        </div>
+                                        <p className="text-xl font-black text-white">
+                                            R$ {saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                );
+                            })()}
 
                             {/* A Pagar Hoje */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">A Pagar Hoje</p>
-                                    <span className="material-symbols-outlined text-red-100 group-hover:text-red-400 transition-colors">event_busy</span>
+                                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">A Pagar Hoje</p>
+                                    <span className="material-symbols-outlined text-red-200 group-hover:text-red-400 transition-colors">event_busy</span>
                                 </div>
                                 <p className="text-xl font-black text-gray-800">
                                     R$ {aPagarHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -2728,8 +2734,8 @@ const AdminDashboard: React.FC = () => {
                             {/* Investimentos */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Investimentos</p>
-                                    <span className="material-symbols-outlined text-purple-100 group-hover:text-purple-400 transition-colors">trending_up</span>
+                                    <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Investimentos</p>
+                                    <span className="material-symbols-outlined text-purple-200 group-hover:text-purple-400 transition-colors">trending_up</span>
                                 </div>
                                 <p className="text-xl font-black text-gray-800">
                                     R$ {totalInvestimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -2739,8 +2745,8 @@ const AdminDashboard: React.FC = () => {
                             {/* Receitas */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Entradas</p>
-                                    <span className="material-symbols-outlined text-green-100 group-hover:text-green-400 transition-colors">trending_up</span>
+                                    <p className="text-[10px] font-black text-green-500 uppercase tracking-widest">Entradas</p>
+                                    <span className="material-symbols-outlined text-green-200 group-hover:text-green-500 transition-colors">trending_up</span>
                                 </div>
                                 <p className="text-xl font-black text-gray-800">
                                     R$ {receitasMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -2750,8 +2756,8 @@ const AdminDashboard: React.FC = () => {
                             {/* Gastos */}
                             <div className="bg-white p-6 rounded-[32px] border shadow-sm group hover:shadow-md transition-all">
                                 <div className="flex justify-between items-center mb-4">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Saídas</p>
-                                    <span className="material-symbols-outlined text-red-100 group-hover:text-red-400 transition-colors">trending_down</span>
+                                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Saídas</p>
+                                    <span className="material-symbols-outlined text-red-200 group-hover:text-red-400 transition-colors">trending_down</span>
                                 </div>
                                 <p className="text-xl font-black text-red-500">
                                     - R$ {gastosMensais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
