@@ -967,7 +967,14 @@ const AdminDashboard: React.FC = () => {
 
         if (!movements) return;
 
-        const inflows = movements.filter(m => m.type === 'purchase' || m.type === 'initial');
+        const inflows = movements
+            .filter(m => m.type === 'purchase' || m.type === 'initial')
+            .sort((a, b) => {
+                const dateA = a.expiration_date || '9999-12-31';
+                const dateB = b.expiration_date || '9999-12-31';
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
+                return (a.movement_date || '').localeCompare(b.movement_date || '');
+            });
         const outflows = movements.filter(m => m.type === 'sale' || m.type === 'adjustment');
 
         const totalIn = inflows.reduce((acc, m) => acc + m.quantity, 0);
@@ -983,7 +990,7 @@ const AdminDashboard: React.FC = () => {
         });
         const finalCost = totalQtyIn > 0 ? totalValue / totalQtyIn : 0;
 
-        // 2. Calculate Active Expiration & Lot (FIFO)
+        // 2. Calculate Active Expiration & Lot (FEFO - First Expired First Out)
         let remainingOut = totalOut;
         let activeExp = null;
         let activeLot = null;
@@ -1079,21 +1086,23 @@ const AdminDashboard: React.FC = () => {
                 await syncProductData(id);
             }
         } else {
-            const { error: insError } = await supabase.from('products').insert([editingProduct]);
+            const { data: newProd, error: insError } = await supabase.from('products').insert([editingProduct]).select().single();
             error = insError;
 
-            if (!error && (editingProduct.initial_stock || 0) > 0) {
-                await supabase.from('inventory_movements').insert([{
-                    product_id: editingProduct.id,
-                    type: 'initial',
-                    quantity: editingProduct.initial_stock,
-                    unit_cost: editingProduct.cost_price || 0,
-                    movement_date: editingProduct.initial_stock_date || new Date().toISOString().split('T')[0],
-                    expiration_date: editingProduct.expiration_date,
-                    lot_number: editingProduct.lot_number,
-                    reason: 'Estoque Inicial'
-                }]);
-                await syncProductData(editingProduct.id!);
+            if (!error && newProd) {
+                if ((editingProduct.initial_stock || 0) > 0 || editingProduct.lot_number || editingProduct.expiration_date) {
+                    await supabase.from('inventory_movements').insert([{
+                        product_id: newProd.id,
+                        type: 'initial',
+                        quantity: editingProduct.initial_stock || 0,
+                        unit_cost: editingProduct.cost_price || 0,
+                        movement_date: editingProduct.initial_stock_date || new Date().toISOString().split('T')[0],
+                        expiration_date: editingProduct.expiration_date,
+                        lot_number: editingProduct.lot_number,
+                        reason: 'Estoque Inicial'
+                    }]);
+                }
+                await syncProductData(newProd.id);
             }
         }
 
@@ -3283,6 +3292,62 @@ const AdminDashboard: React.FC = () => {
                             </div>
                         )}
 
+                        <div className="bg-white p-6 rounded-3xl border shadow-sm mb-6">
+                            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-4 flex items-center">
+                                <span className="material-symbols-outlined mr-2 text-primary">inventory_2</span>
+                                Resumo de Lotes Ativos
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {products.filter(p => p.stock_quantity > 0).slice(0, 4).map(p => {
+                                    const prodMovements = movements.filter(m => m.product_id === p.id);
+                                    const inflows = prodMovements
+                                        .filter(m => m.type === 'purchase' || m.type === 'initial')
+                                        .sort((a, b) => {
+                                            const dateA = a.expiration_date || '9999-12-31';
+                                            const dateB = b.expiration_date || '9999-12-31';
+                                            if (dateA !== dateB) return dateA.localeCompare(dateB);
+                                            return (a.movement_date || '').localeCompare(b.movement_date || '');
+                                        });
+
+                                    const totalOut = prodMovements
+                                        .filter(m => m.type === 'sale' || m.type === 'adjustment')
+                                        .reduce((acc, m) => acc + m.quantity, 0);
+
+                                    let remainingOut = totalOut;
+                                    const activeLots: { lot: string; exp: string; qty: number }[] = [];
+                                    for (const m of inflows) {
+                                        if (m.quantity > 0) {
+                                            if (remainingOut >= m.quantity) {
+                                                remainingOut -= m.quantity;
+                                            } else {
+                                                activeLots.push({
+                                                    lot: m.lot_number || 'S/L',
+                                                    exp: m.expiration_date || '',
+                                                    qty: m.quantity - remainingOut
+                                                });
+                                                remainingOut = 0;
+                                            }
+                                        }
+                                    }
+
+                                    return (
+                                        <div key={p.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                            <p className="text-[10px] font-bold text-gray-500 truncate mb-2">{p.name}</p>
+                                            <div className="space-y-2">
+                                                {activeLots.map((l, i) => (
+                                                    <div key={i} className="flex justify-between items-center bg-white p-2 rounded-lg text-[9px] shadow-sm">
+                                                        <span className="font-black text-gray-700">{l.lot}</span>
+                                                        <span className={`font-bold ${l.exp && new Date(l.exp) < new Date() ? 'text-red-500' : 'text-gray-400'}`}>{formatDate(l.exp)}</span>
+                                                        <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md font-black">{l.qty} un</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="bg-white p-8 rounded-3xl border shadow-sm text-center">
                                 <p className="text-xs font-bold text-gray-400 uppercase mb-2">Itens Estocados</p>
@@ -3348,7 +3413,56 @@ const AdminDashboard: React.FC = () => {
                                                 <tr key={p.id} className={`hover:bg-gray-50/50 transition-colors ${isExpired ? 'bg-red-50/30' : isExpiringSoon ? 'bg-amber-50/30' : ''}`}>
                                                     <td className="px-4 py-5">
                                                         <div className="font-bold text-gray-800 text-xs">{p.name}</div>
-                                                        <div className="text-[9px] text-gray-300 font-mono">{p.id}</div>
+                                                        <div className="text-[9px] text-gray-300 font-mono mb-2">{p.id}</div>
+
+                                                        {/* Composition Breakdown */}
+                                                        {p.stock_quantity > 0 && (() => {
+                                                            const prodMovements = movements.filter(m => m.product_id === p.id);
+                                                            const inflows = prodMovements
+                                                                .filter(m => m.type === 'purchase' || m.type === 'initial')
+                                                                .sort((a, b) => {
+                                                                    const dateA = a.expiration_date || '9999-12-31';
+                                                                    const dateB = b.expiration_date || '9999-12-31';
+                                                                    if (dateA !== dateB) return dateA.localeCompare(dateB);
+                                                                    return (a.movement_date || '').localeCompare(b.movement_date || '');
+                                                                });
+
+                                                            const totalOut = prodMovements
+                                                                .filter(m => m.type === 'sale' || m.type === 'adjustment')
+                                                                .reduce((acc, m) => acc + m.quantity, 0);
+
+                                                            let remainingOut = totalOut;
+                                                            const activeLots: { lot: string; exp: string; qty: number }[] = [];
+                                                            for (const m of inflows) {
+                                                                if (m.quantity > 0) {
+                                                                    if (remainingOut >= m.quantity) {
+                                                                        remainingOut -= m.quantity;
+                                                                    } else {
+                                                                        activeLots.push({
+                                                                            lot: m.lot_number || 'S/L',
+                                                                            exp: m.expiration_date || '',
+                                                                            qty: m.quantity - remainingOut
+                                                                        });
+                                                                        remainingOut = 0;
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            if (activeLots.length <= 1) return null;
+
+                                                            return (
+                                                                <div className="mt-2 space-y-1">
+                                                                    {activeLots.map((l, idx) => (
+                                                                        <div key={idx} className="flex items-center text-[8px] bg-gray-50 py-1 px-2 rounded-md border border-gray-100">
+                                                                            <span className="material-symbols-outlined text-[10px] mr-1 text-gray-400">package_2</span>
+                                                                            <span className="font-bold text-gray-600 mr-2">{l.lot}:</span>
+                                                                            <span className="text-gray-400 mr-2">{formatDate(l.exp)}</span>
+                                                                            <span className="ml-auto font-black text-blue-600">{l.qty} un</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="px-4 py-5">
                                                         <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-[10px] font-bold">
