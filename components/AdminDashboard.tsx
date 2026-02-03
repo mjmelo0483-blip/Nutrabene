@@ -31,6 +31,7 @@ interface ProductInventory {
     initial_stock?: number;
     initial_stock_date?: string;
     expiration_date?: string;
+    lot_number?: string;
 }
 
 interface InventoryMovement {
@@ -42,6 +43,7 @@ interface InventoryMovement {
     reason?: string;
     movement_date: string;
     expiration_date?: string;
+    lot_number?: string;
     created_at?: string;
 }
 
@@ -981,14 +983,16 @@ const AdminDashboard: React.FC = () => {
         });
         const finalCost = totalQtyIn > 0 ? totalValue / totalQtyIn : 0;
 
-        // 2. Calculate Active Expiration (FIFO)
+        // 2. Calculate Active Expiration & Lot (FIFO)
         let remainingOut = totalOut;
         let activeExp = null;
+        let activeLot = null;
         for (const m of inflows) {
             if (remainingOut >= m.quantity) {
                 remainingOut -= m.quantity;
             } else {
                 activeExp = m.expiration_date;
+                activeLot = m.lot_number;
                 break;
             }
         }
@@ -996,7 +1000,8 @@ const AdminDashboard: React.FC = () => {
         await supabase.from('products').update({
             stock_quantity: finalStock,
             cost_price: finalCost,
-            expiration_date: activeExp
+            expiration_date: activeExp,
+            lot_number: activeLot
         }).eq('id', productId);
     }
 
@@ -1026,6 +1031,7 @@ const AdminDashboard: React.FC = () => {
                     unit_cost: editingProduct.cost_price || 0,
                     movement_date: editingProduct.initial_stock_date || new Date().toISOString().split('T')[0],
                     expiration_date: editingProduct.expiration_date,
+                    lot_number: editingProduct.lot_number,
                     reason: 'Estoque Inicial'
                 }]);
                 await syncProductData(editingProduct.id!);
@@ -3263,6 +3269,7 @@ const AdminDashboard: React.FC = () => {
                                     <thead className="bg-gray-50 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">
                                         <tr>
                                             <th className="px-4 py-5">Produto</th>
+                                            <th className="px-4 py-5">Lote</th>
                                             <th className="px-4 py-5">Valores</th>
                                             <th className="px-4 py-5 text-center">Vencimento</th>
                                             <th className="px-4 py-5 text-center">Estoque</th>
@@ -3283,6 +3290,11 @@ const AdminDashboard: React.FC = () => {
                                                     <td className="px-4 py-5">
                                                         <div className="font-bold text-gray-800 text-xs">{p.name}</div>
                                                         <div className="text-[9px] text-gray-300 font-mono">{p.id}</div>
+                                                    </td>
+                                                    <td className="px-4 py-5">
+                                                        <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-[10px] font-bold">
+                                                            {p.lot_number || '-'}
+                                                        </span>
                                                     </td>
                                                     <td className="px-4 py-5">
                                                         <div className="flex space-x-4">
@@ -5887,7 +5899,11 @@ const AdminDashboard: React.FC = () => {
                                         <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Data Inicial</span>
                                         <input type="date" value={editingProduct?.initial_stock_date || ''} onChange={e => setEditingProduct({ ...editingProduct, initial_stock_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" required />
                                     </label>
-                                    <label className="block col-span-2 mt-2">
+                                    <label className="block mt-2">
+                                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Número do Lote</span>
+                                        <input type="text" value={editingProduct?.lot_number || ''} onChange={e => setEditingProduct({ ...editingProduct, lot_number: e.target.value })} placeholder="Ex: L2024-001" className="w-full p-4 border-none rounded-2xl bg-white mt-1" />
+                                    </label>
+                                    <label className="block mt-2">
                                         <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4">Data de Vencimento</span>
                                         <input type="date" value={editingProduct?.expiration_date || ''} onChange={e => setEditingProduct({ ...editingProduct, expiration_date: e.target.value })} className="w-full p-4 border-none rounded-2xl bg-white mt-1" />
                                     </label>
@@ -5958,15 +5974,21 @@ const AdminDashboard: React.FC = () => {
 
                                 {movementForm.type === 'purchase' ? (
                                     <div className="space-y-4 animate-in slide-in-from-top-2">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-4">Custo Unitário da Compra (R$)</label>
-                                            <input type="number" step="0.01" value={movementForm.unit_cost || 0} onChange={e => setMovementForm({ ...movementForm, unit_cost: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-primary/5 focus:bg-white focus:ring-4 ring-primary/10 outline-none font-bold text-primary" placeholder="0,00" required={movementForm.type === 'purchase'} />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-4">Lote</label>
+                                                <input type="text" value={movementForm.lot_number || ''} onChange={e => setMovementForm({ ...movementForm, lot_number: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-primary/5 focus:bg-white focus:ring-4 ring-primary/10 outline-none font-bold text-primary" placeholder="Lote" required={movementForm.type === 'purchase'} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-4">Custo Unitário (R$)</label>
+                                                <input type="number" step="0.01" value={movementForm.unit_cost || 0} onChange={e => setMovementForm({ ...movementForm, unit_cost: parseFloat(e.target.value) })} className="w-full p-5 border-none rounded-2xl bg-primary/5 focus:bg-white focus:ring-4 ring-primary/10 outline-none font-bold text-primary" placeholder="0,00" required={movementForm.type === 'purchase'} />
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-4">Data de Vencimento do Lote</label>
                                             <input type="date" value={movementForm.expiration_date || ''} onChange={e => setMovementForm({ ...movementForm, expiration_date: e.target.value })} className="w-full p-5 border-none rounded-2xl bg-primary/5 focus:bg-white focus:ring-4 ring-primary/10 outline-none font-bold text-primary" />
                                         </div>
-                                        <p className="text-[10px] text-gray-400 px-4 mt-2 italic">* O custo médio e a data de vencimento do produto serão atualizados.</p>
+                                        <p className="text-[10px] text-gray-400 px-4 mt-2 italic">* O custo médio, lote ativo e a data de vencimento do produto serão atualizados.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-2 animate-in slide-in-from-top-2">
