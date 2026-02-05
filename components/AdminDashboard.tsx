@@ -5715,16 +5715,16 @@ const AdminDashboard: React.FC = () => {
                                     <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10 space-y-3">
                                         <div className="flex justify-between items-center text-sm">
                                             <span className="text-gray-500 font-bold">Total Bruto:</span>
-                                            <span className="font-black text-gray-800">R$ {financialForm.amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                            <span className="font-black text-gray-800">R$ {financialForm.amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-amber-600 text-sm">
                                             <span className="font-bold">Taxa Cartão ({financialForm.card_fee_percent}%):</span>
-                                            <span className="font-black">- R$ {financialForm.card_fee_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                            <span className="font-black">- R$ {financialForm.card_fee_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </div>
                                         <div className="flex justify-between items-center pt-3 border-t border-primary/20">
                                             <span className="text-primary font-black text-lg">Líquido Final:</span>
                                             <div className="text-right">
-                                                <span className="text-primary font-black text-xl block">R$ {financialForm.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                <span className="text-primary font-black text-xl block">R$ {financialForm.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                             </div>
                                         </div>
                                     </div>
