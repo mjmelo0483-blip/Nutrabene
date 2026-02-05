@@ -5695,18 +5695,20 @@ const AdminDashboard: React.FC = () => {
                                                 ))}
                                             </select>
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Selecionar Cartão</label>
-                                            <select
-                                                value={financialForm.credit_card_id || ''}
-                                                onChange={e => setFinancialForm({ ...financialForm, credit_card_id: e.target.value })}
-                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
-                                                required={financialForm.payment_method === 'credit_card'}
-                                            >
-                                                <option value="">Selecione o Cartão</option>
-                                                {creditCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                                            </select>
-                                        </div>
+                                        {financialForm.type === 'payable' && (
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Selecionar Cartão</label>
+                                                <select
+                                                    value={financialForm.credit_card_id || ''}
+                                                    onChange={e => setFinancialForm({ ...financialForm, credit_card_id: e.target.value })}
+                                                    className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                                    required={financialForm.payment_method === 'credit_card' && financialForm.type === 'payable'}
+                                                >
+                                                    <option value="">Selecione o Cartão</option>
+                                                    {creditCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 {financialForm.type === 'receivable' && (financialForm.payment_method === 'credit_card' || financialForm.payment_method === 'debit_card') && (financialForm.amount || 0) > 0 && (
