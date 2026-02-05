@@ -1787,6 +1787,11 @@ const AdminDashboard: React.FC = () => {
                 const { data: oldEntry } = await supabase.from('financial_entries').select('*').eq('id', entryData.id).single();
                 const { id, ...updateData } = entryData;
 
+                // Para receitas de cartão, o valor persistido deve ser o líquido
+                if (updateData.type === 'receivable' && (updateData.payment_method === 'credit_card' || updateData.payment_method === 'debit_card')) {
+                    updateData.amount = updateData.net_amount || updateData.amount;
+                }
+
                 const { error } = await supabase.from('financial_entries').update(updateData).eq('id', id);
                 if (error) throw error;
 
@@ -1830,6 +1835,7 @@ const AdminDashboard: React.FC = () => {
                     : entryData.amount;
 
                 const installmentAmount = parseFloat(((baseAmount || 0) / installments).toFixed(2));
+                const installmentFee = parseFloat(((entryData.card_fee_amount || 0) / installments).toFixed(2));
                 const entriesToInsert = [];
 
                 // If recurring, create multiple entries each 30 days apart
@@ -1877,6 +1883,7 @@ const AdminDashboard: React.FC = () => {
                             ...cleanEntry,
                             bank_account_id: bankId,
                             amount: i === installments ? parseFloat(((baseAmount || 0) - (installmentAmount * (installments - 1))).toFixed(2)) : installmentAmount,
+                            card_fee_amount: i === installments ? parseFloat(((entryData.card_fee_amount || 0) - (installmentFee * (installments - 1))).toFixed(2)) : installmentFee,
                             due_date: finalDueDateStr,
                             installment_number: i,
                             installments_total: installments,
@@ -4240,7 +4247,13 @@ const AdminDashboard: React.FC = () => {
                                                                                 <td className="px-4 py-4 text-right font-black text-green-600">R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                                                                 <td className="px-4 py-4 text-center">
                                                                                     <div className="flex items-center justify-center gap-2">
-                                                                                        <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
+                                                                                        <button onClick={() => {
+                                                                                            const entryToEdit = (e.payment_method?.includes('card') && e.type === 'receivable')
+                                                                                                ? { ...e, amount: (e.amount || 0) + (e.card_fee_amount || 0) }
+                                                                                                : e;
+                                                                                            setFinancialForm(entryToEdit);
+                                                                                            setIsFinancialModalOpen(true);
+                                                                                        }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
                                                                                         <button onClick={() => handleDeleteFinancial(e.id)} className="text-red-400 hover:text-red-500"><span className="material-symbols-outlined text-xs">delete</span></button>
                                                                                     </div>
                                                                                 </td>
@@ -4344,7 +4357,13 @@ const AdminDashboard: React.FC = () => {
                                                                                 <td className="px-4 py-4 text-right font-black text-red-600">R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                                                                 <td className="px-4 py-4 text-center">
                                                                                     <div className="flex items-center justify-center gap-2">
-                                                                                        <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
+                                                                                        <button onClick={() => {
+                                                                                            const entryToEdit = (e.payment_method?.includes('card') && e.type === 'receivable')
+                                                                                                ? { ...e, amount: (e.amount || 0) + (e.card_fee_amount || 0) }
+                                                                                                : e;
+                                                                                            setFinancialForm(entryToEdit);
+                                                                                            setIsFinancialModalOpen(true);
+                                                                                        }} className="text-blue-400 hover:text-blue-600"><span className="material-symbols-outlined text-xs">edit</span></button>
                                                                                         <button onClick={() => handleDeleteFinancial(e.id)} className="text-red-400 hover:text-red-500"><span className="material-symbols-outlined text-xs">delete</span></button>
                                                                                     </div>
                                                                                 </td>
@@ -4673,7 +4692,13 @@ const AdminDashboard: React.FC = () => {
                                                                 </td>
                                                                 <td className="px-6 py-4 text-center">
                                                                     <div className="flex items-center justify-center gap-2">
-                                                                        <button onClick={() => { setFinancialForm(e); setIsFinancialModalOpen(true); }} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
+                                                                        <button onClick={() => {
+                                                                            const entryToEdit = (e.payment_method?.includes('card') && e.type === 'receivable')
+                                                                                ? { ...e, amount: (e.amount || 0) + (e.card_fee_amount || 0) }
+                                                                                : e;
+                                                                            setFinancialForm(entryToEdit);
+                                                                            setIsFinancialModalOpen(true);
+                                                                        }} className="h-7 w-7 text-blue-500 hover:bg-blue-50 rounded-lg flex items-center justify-center transition-colors">
                                                                             <span className="material-symbols-outlined text-xs">edit</span>
                                                                         </button>
                                                                         <button onClick={() => handleDeleteFinancial(e.id)} className="h-7 w-7 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors">
