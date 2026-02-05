@@ -81,6 +81,10 @@ interface FinancialEntry {
     entry_date?: string;
     payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash' | 'other' | 'credit_acc' | 'transfer' | 'investment';
     credit_card_id?: string;
+    card_brand?: string;
+    card_fee_percent?: number;
+    card_fee_amount?: number;
+    net_amount?: number;
     installments_total?: number;
     installment_number?: number;
     transfer_id?: string;
@@ -204,6 +208,10 @@ const AdminDashboard: React.FC = () => {
         status: 'pending',
         payment_method: 'cash',
         installments_total: 1,
+        card_brand: '',
+        card_fee_percent: 0,
+        card_fee_amount: 0,
+        net_amount: 0,
         isRecurring: false,
         recurrenceCount: 2
     });
@@ -840,6 +848,49 @@ const AdminDashboard: React.FC = () => {
         saleForm.installments,
         isSaleModalOpen,
         products,
+        paymentFees
+    ]);
+
+    // --- Automatic Financial Calculations ---
+    useEffect(() => {
+        if (!isFinancialModalOpen || financialForm.type !== 'receivable') return;
+
+        const baseAmount = financialForm.amount || 0;
+        let feePercent = 0;
+
+        if (financialForm.payment_method === 'credit_card' || financialForm.payment_method === 'debit_card') {
+            let methodKey: 'debit' | 'credit_cash' | 'credit_installments' = 'credit_cash';
+            if (financialForm.payment_method === 'debit_card') {
+                methodKey = 'debit';
+            } else if ((financialForm.installments_total || 1) > 1) {
+                methodKey = 'credit_installments';
+            }
+
+            const fee = paymentFees.find(f => f.brand === financialForm.card_brand && f.method === methodKey);
+            feePercent = fee?.fee_percentage || 0;
+        }
+
+        const feeAmt = baseAmount * (feePercent / 100);
+        const finalNet = baseAmount - feeAmt;
+
+        if (
+            financialForm.card_fee_percent !== feePercent ||
+            financialForm.card_fee_amount !== feeAmt ||
+            financialForm.net_amount !== finalNet
+        ) {
+            setFinancialForm(prev => ({
+                ...prev,
+                card_fee_percent: feePercent,
+                card_fee_amount: feeAmt,
+                net_amount: finalNet
+            }));
+        }
+    }, [
+        financialForm.amount,
+        financialForm.payment_method,
+        financialForm.card_brand,
+        financialForm.installments_total,
+        isFinancialModalOpen,
         paymentFees
     ]);
 
@@ -1755,11 +1806,11 @@ const AdminDashboard: React.FC = () => {
                 if (bank && oldEntry && oldEntry.status !== entryData.status) {
                     let balanceAdjustment = 0;
                     if (entryData.status === 'paid') {
-                        // Just paid
-                        balanceAdjustment = entryData.type === 'receivable' ? entryData.amount : -entryData.amount;
+                        // Just paid - use amount which is now (or should be) net for cards
+                        balanceAdjustment = entryData.type === 'receivable' ? (entryData.amount || 0) : -(entryData.amount || 0);
                     } else if (oldEntry.status === 'paid') {
                         // Was paid, now reverted
-                        balanceAdjustment = oldEntry.type === 'receivable' ? -oldEntry.amount : oldEntry.amount;
+                        balanceAdjustment = oldEntry.type === 'receivable' ? -(oldEntry.amount || 0) : (oldEntry.amount || 0);
                     }
 
                     if (balanceAdjustment !== 0) {
@@ -1774,8 +1825,11 @@ const AdminDashboard: React.FC = () => {
                 const isRecurring = financialForm.isRecurring && financialForm.recurrenceCount && financialForm.recurrenceCount > 1;
                 const recurrenceCount = isRecurring ? financialForm.recurrenceCount : 1;
 
-                const baseAmount = entryData.amount;
-                const installmentAmount = parseFloat((baseAmount / installments).toFixed(2));
+                const baseAmount = (entryData.type === 'receivable' && (entryData.payment_method === 'credit_card' || entryData.payment_method === 'debit_card'))
+                    ? (entryData.net_amount || entryData.amount)
+                    : entryData.amount;
+
+                const installmentAmount = parseFloat(((baseAmount || 0) / installments).toFixed(2));
                 const entriesToInsert = [];
 
                 // If recurring, create multiple entries each 30 days apart
@@ -1822,7 +1876,7 @@ const AdminDashboard: React.FC = () => {
                         entriesToInsert.push({
                             ...cleanEntry,
                             bank_account_id: bankId,
-                            amount: i === installments ? parseFloat((baseAmount - (installmentAmount * (installments - 1))).toFixed(2)) : installmentAmount,
+                            amount: i === installments ? parseFloat(((baseAmount || 0) - (installmentAmount * (installments - 1))).toFixed(2)) : installmentAmount,
                             due_date: finalDueDateStr,
                             installment_number: i,
                             installments_total: installments,
@@ -5577,7 +5631,9 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                                 <input type="text" value={financialForm.description || ''} onChange={e => setFinancialForm({ ...financialForm, description: e.target.value })} placeholder="Descrição" className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all italic" required />
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Valor (R$)</label>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">
+                                        {financialForm.type === 'receivable' && (financialForm.payment_method === 'credit_card' || financialForm.payment_method === 'debit_card') ? 'Valor Bruto (R$)' : 'Valor (R$)'}
+                                    </label>
                                     <input type="number" step="0.01" value={financialForm.amount || ''} onChange={e => setFinancialForm({ ...financialForm, amount: parseFloat(e.target.value) })} placeholder="0,00" className="w-full p-4 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all font-bold text-lg" required />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -5607,33 +5663,68 @@ const AdminDashboard: React.FC = () => {
                                             <option value="other"> outros</option>
                                         </select>
                                     </div>
-                                    {financialForm.payment_method === 'credit_card' && (
+                                    {(financialForm.payment_method === 'credit_card' || financialForm.payment_method === 'debit_card') && (
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Parcelas</label>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                max="48"
-                                                value={financialForm.installments_total || 1}
-                                                onChange={e => setFinancialForm({ ...financialForm, installments_total: parseInt(e.target.value) })}
-                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
-                                            />
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Bandeira</label>
+                                            <select
+                                                value={financialForm.card_brand || ''}
+                                                onChange={e => setFinancialForm({ ...financialForm, card_brand: e.target.value })}
+                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                                required={financialForm.payment_method === 'credit_card' || financialForm.payment_method === 'debit_card'}
+                                            >
+                                                <option value="">Selecione</option>
+                                                <option value="Mastercard">Mastercard</option>
+                                                <option value="Visa">Visa</option>
+                                                <option value="Elo">Elo</option>
+                                                <option value="Outros">Outros</option>
+                                            </select>
                                         </div>
                                     )}
                                 </div>
-
                                 {financialForm.payment_method === 'credit_card' && (
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Selecionar Cartão</label>
-                                        <select
-                                            value={financialForm.credit_card_id || ''}
-                                            onChange={e => setFinancialForm({ ...financialForm, credit_card_id: e.target.value })}
-                                            className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
-                                            required={financialForm.payment_method === 'credit_card'}
-                                        >
-                                            <option value="">Selecione o Cartão</option>
-                                            {creditCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                                        </select>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Parcelas</label>
+                                            <select
+                                                value={financialForm.installments_total || 1}
+                                                onChange={e => setFinancialForm({ ...financialForm, installments_total: parseInt(e.target.value) })}
+                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all"
+                                            >
+                                                {[...Array(12)].map((_, i) => (
+                                                    <option key={i + 1} value={i + 1}>{i + 1}x</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Selecionar Cartão</label>
+                                            <select
+                                                value={financialForm.credit_card_id || ''}
+                                                onChange={e => setFinancialForm({ ...financialForm, credit_card_id: e.target.value })}
+                                                className="w-full p-5 border-none rounded-2xl bg-gray-50 focus:bg-white focus:ring-4 ring-primary/10 outline-none transition-all appearance-none cursor-pointer"
+                                                required={financialForm.payment_method === 'credit_card'}
+                                            >
+                                                <option value="">Selecione o Cartão</option>
+                                                {creditCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                                {financialForm.type === 'receivable' && (financialForm.payment_method === 'credit_card' || financialForm.payment_method === 'debit_card') && (financialForm.amount || 0) > 0 && (
+                                    <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10 space-y-3">
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-500 font-bold">Total Bruto:</span>
+                                            <span className="font-black text-gray-800">R$ {financialForm.amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-amber-600 text-sm">
+                                            <span className="font-bold">Taxa Cartão ({financialForm.card_fee_percent}%):</span>
+                                            <span className="font-black">- R$ {financialForm.card_fee_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center pt-3 border-t border-primary/20">
+                                            <span className="text-primary font-black text-lg">Líquido Final:</span>
+                                            <div className="text-right">
+                                                <span className="text-primary font-black text-xl block">R$ {financialForm.net_amount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
 
