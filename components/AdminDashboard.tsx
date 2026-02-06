@@ -870,8 +870,8 @@ const AdminDashboard: React.FC = () => {
             feePercent = fee?.fee_percentage || 0;
         }
 
-        const feeAmt = baseAmount * (feePercent / 100);
-        const finalNet = baseAmount - feeAmt;
+        const feeAmt = parseFloat((baseAmount * (feePercent / 100)).toFixed(2));
+        const finalNet = parseFloat((baseAmount - feeAmt).toFixed(2));
 
         if (
             financialForm.card_fee_percent !== feePercent ||
@@ -1778,6 +1778,26 @@ const AdminDashboard: React.FC = () => {
         const category = categories.find(c => c.id === financialForm.category_id)?.name || financialForm.category || 'Geral';
         const entryData = { ...financialForm, category };
 
+        // For card receivables, recalculate fee and net amount during save to avoid stale state issues
+        if (entryData.type === 'receivable' && (entryData.payment_method === 'credit_card' || entryData.payment_method === 'debit_card')) {
+            const grossAmount = entryData.amount || 0;
+            let feePercent = 0;
+            let methodKey: 'debit' | 'credit_cash' | 'credit_installments' = 'credit_cash';
+
+            if (entryData.payment_method === 'debit_card') {
+                methodKey = 'debit';
+            } else if ((entryData.installments_total || 1) > 1) {
+                methodKey = 'credit_installments';
+            }
+
+            const fee = paymentFees.find(f => f.brand === entryData.card_brand && f.method === methodKey);
+            feePercent = fee?.fee_percentage || 0;
+
+            entryData.card_fee_percent = feePercent;
+            entryData.card_fee_amount = parseFloat((grossAmount * (feePercent / 100)).toFixed(2));
+            entryData.net_amount = parseFloat((grossAmount - entryData.card_fee_amount).toFixed(2));
+        }
+
         try {
             const bankId = entryData.bank_account_id || bankAccounts[0]?.id;
             const bank = bankAccounts.find(b => b.id === bankId);
@@ -1787,9 +1807,9 @@ const AdminDashboard: React.FC = () => {
                 const { data: oldEntry } = await supabase.from('financial_entries').select('*').eq('id', entryData.id).single();
                 const { id, ...updateData } = entryData;
 
-                // Para receitas de cartão, o valor persistido deve ser o líquido
+                // Para receitas de cartão, o valor persistido na coluna 'amount' deve ser o líquido
                 if (updateData.type === 'receivable' && (updateData.payment_method === 'credit_card' || updateData.payment_method === 'debit_card')) {
-                    updateData.amount = updateData.net_amount || updateData.amount;
+                    updateData.amount = entryData.net_amount || 0;
                 }
 
                 const { error } = await supabase.from('financial_entries').update(updateData).eq('id', id);
@@ -1831,8 +1851,8 @@ const AdminDashboard: React.FC = () => {
                 const recurrenceCount = isRecurring ? financialForm.recurrenceCount : 1;
 
                 const baseAmount = (entryData.type === 'receivable' && (entryData.payment_method === 'credit_card' || entryData.payment_method === 'debit_card'))
-                    ? (entryData.net_amount || entryData.amount)
-                    : entryData.amount;
+                    ? (entryData.net_amount || 0)
+                    : parseFloat((entryData.amount || 0).toFixed(2));
 
                 const installmentAmount = parseFloat(((baseAmount || 0) / installments).toFixed(2));
                 const installmentFee = parseFloat(((entryData.card_fee_amount || 0) / installments).toFixed(2));
@@ -4249,7 +4269,7 @@ const AdminDashboard: React.FC = () => {
                                                                                     <div className="flex items-center justify-center gap-2">
                                                                                         <button onClick={() => {
                                                                                             const entryToEdit = (e.payment_method?.includes('card') && e.type === 'receivable')
-                                                                                                ? { ...e, amount: (e.amount || 0) + (e.card_fee_amount || 0) }
+                                                                                                ? { ...e, amount: parseFloat(((e.amount || 0) + (e.card_fee_amount || 0)).toFixed(2)) }
                                                                                                 : e;
                                                                                             setFinancialForm(entryToEdit);
                                                                                             setIsFinancialModalOpen(true);
@@ -4359,7 +4379,7 @@ const AdminDashboard: React.FC = () => {
                                                                                     <div className="flex items-center justify-center gap-2">
                                                                                         <button onClick={() => {
                                                                                             const entryToEdit = (e.payment_method?.includes('card') && e.type === 'receivable')
-                                                                                                ? { ...e, amount: (e.amount || 0) + (e.card_fee_amount || 0) }
+                                                                                                ? { ...e, amount: parseFloat(((e.amount || 0) + (e.card_fee_amount || 0)).toFixed(2)) }
                                                                                                 : e;
                                                                                             setFinancialForm(entryToEdit);
                                                                                             setIsFinancialModalOpen(true);
@@ -4694,7 +4714,7 @@ const AdminDashboard: React.FC = () => {
                                                                     <div className="flex items-center justify-center gap-2">
                                                                         <button onClick={() => {
                                                                             const entryToEdit = (e.payment_method?.includes('card') && e.type === 'receivable')
-                                                                                ? { ...e, amount: (e.amount || 0) + (e.card_fee_amount || 0) }
+                                                                                ? { ...e, amount: parseFloat(((e.amount || 0) + (e.card_fee_amount || 0)).toFixed(2)) }
                                                                                 : e;
                                                                             setFinancialForm(entryToEdit);
                                                                             setIsFinancialModalOpen(true);
