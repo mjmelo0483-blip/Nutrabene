@@ -2270,6 +2270,20 @@ const AdminDashboard: React.FC = () => {
             const { error } = await supabase.from('financial_entries').update(updates).in('id', entryIds);
             if (error) throw error;
 
+            // Sincroniza com as vendas se o status ou data de vencimento foram alterados
+            if (updates.status || updates.due_date) {
+                const affectedEntries = financialEntries.filter(e => selectedEntries.has(e.id) && e.sale_id);
+                const saleIds = [...new Set(affectedEntries.map(e => e.sale_id))].filter(Boolean) as string[];
+
+                if (saleIds.length > 0) {
+                    const saleUpdates: any = {};
+                    if (updates.status) saleUpdates.payment_status = updates.status;
+                    if (updates.due_date) saleUpdates.due_date = updates.due_date;
+
+                    await supabase.from('sales').update(saleUpdates).in('id', saleIds);
+                }
+            }
+
             showNotification(`${selectedEntries.size} lançamentos atualizados com sucesso!`);
             setIsBulkEditFinancialModalOpen(false);
             setSelectedEntries(new Set());
