@@ -500,10 +500,10 @@ const AdminDashboard: React.FC = () => {
                     .split(' - ')[0]
                     .trim() || 'Outros';
 
-                if (name === 'Investimento Inicial') return;
-
+                const isInitial = e.description.startsWith('Investimento Inicial');
                 if (!summary[name]) summary[name] = 0;
-                if (e.type === 'payable') summary[name] += e.amount;
+                // Investimento Inicial e Aplicações (payable) aumentam o saldo do investimento
+                if (isInitial || e.type === 'payable') summary[name] += e.amount;
                 else summary[name] -= e.amount;
             });
         return summary;
@@ -2074,27 +2074,25 @@ const AdminDashboard: React.FC = () => {
 
             // 2. Prepare Payload
             const payload = {
-                type: isApp ? 'payable' : 'receivable',
-                description: `${isInitial ? 'Investimento Inicial' : (isApp ? 'Aplicação' : 'Resgate')}: ${investmentForm.name}${investmentForm.description ? ' - ' + investmentForm.description : ''}`,
+                investment_id: investmentForm.investment_id || crypto.randomUUID(),
+                bank_account_id: isInitial ? null : investmentForm.bankAccountId,
                 amount: investmentForm.amount,
                 due_date: investmentForm.date,
-                entry_date: investmentForm.date,
-                payment_date: investmentForm.date,
+                description: `${isInitial ? 'Investimento Inicial' : (isApp ? 'Aplicação' : 'Resgate')}: ${investmentForm.name}${investmentForm.description ? ' - ' + investmentForm.description : ''}`,
+                type: isInitial ? 'receivable' : (isApp ? 'payable' : 'receivable'),
                 status: 'paid',
                 payment_method: 'investment',
-                bank_account_id: isInitial ? null : investmentForm.bankAccountId,
                 category: invCategory?.name || 'Investimento',
-                category_id: invCategory?.id
+                category_id: invCategory?.id,
+                entry_date: investmentForm.date, // Keep entry_date and payment_date
+                payment_date: investmentForm.date
             };
 
             if (investmentForm.id) {
                 const { error: errUpdate } = await supabase.from('financial_entries').update(payload).eq('id', investmentForm.id);
                 if (errUpdate) throw errUpdate;
             } else {
-                const { error: errEntry } = await supabase.from('financial_entries').insert([{
-                    ...payload,
-                    investment_id: crypto.randomUUID()
-                }]);
+                const { error: errEntry } = await supabase.from('financial_entries').insert([payload]);
                 if (errEntry) throw errEntry;
             }
 
@@ -2501,7 +2499,7 @@ const AdminDashboard: React.FC = () => {
 
         // Special Groupings: Transfers and Investments
         const transferEntries = filteredEntries.filter(e => e.payment_method === 'transfer');
-        const investmentEntries = filteredEntries.filter(e => e.payment_method === 'investment');
+        const investmentEntries = filteredEntries.filter(e => e.payment_method === 'investment' && !e.description.startsWith('Investimento Inicial'));
 
         const totalNetTransfers = transferEntries.reduce((acc, e) => {
             return acc + (e.type === 'receivable' ? e.amount : -e.amount);
@@ -2576,6 +2574,8 @@ const AdminDashboard: React.FC = () => {
 
             const nullAccountEntries = financialEntries.filter(e =>
                 !e.bank_account_id &&
+                e.payment_method !== 'investment' &&
+                !e.description.startsWith('Investimento Inicial') &&
                 e.due_date.split('T')[0] < periodStartStr &&
                 e.due_date.split('T')[0] > baseReferenceDate
             );
@@ -4770,8 +4770,8 @@ const AdminDashboard: React.FC = () => {
                                         {/* Investment Summary Cards */}
                                         {(() => {
                                             const investmentEntries = financialEntries.filter(e => e.payment_method === 'investment');
-                                            const totalApplications = investmentEntries.filter(e => e.type === 'payable').reduce((acc, e) => acc + e.amount, 0);
-                                            const totalRedemptions = investmentEntries.filter(e => e.type === 'receivable').reduce((acc, e) => acc + e.amount, 0);
+                                            const totalApplications = investmentEntries.filter(e => e.type === 'payable' || e.description.startsWith('Investimento Inicial')).reduce((acc, e) => acc + e.amount, 0);
+                                            const totalRedemptions = investmentEntries.filter(e => e.type === 'receivable' && !e.description.startsWith('Investimento Inicial')).reduce((acc, e) => acc + e.amount, 0);
                                             const netInvested = totalApplications - totalRedemptions;
 
                                             // Group by investment name
@@ -4783,7 +4783,8 @@ const AdminDashboard: React.FC = () => {
                                                     .trim();
                                                 if (!name) name = 'Outros';
                                                 if (!acc[name]) acc[name] = { applications: 0, redemptions: 0, entries: [] };
-                                                if (e.type === 'payable') acc[name].applications += e.amount;
+                                                const isInitial = e.description.startsWith('Investimento Inicial');
+                                                if (isInitial || e.type === 'payable') acc[name].applications += e.amount;
                                                 else acc[name].redemptions += e.amount;
                                                 acc[name].entries.push(e);
                                                 return acc;
